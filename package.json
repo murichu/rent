@@ -1,0 +1,17 @@
+{
+  "name": "rent",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start:backend": "yarn --cwd backend start",
+    "start:frontend": "yarn --cwd frontend dev",
+    "start": "concurrently \"yarn start:backend\" \"yarn start:frontend\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
