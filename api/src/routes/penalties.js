@@ -2,6 +2,7 @@ import { Router } from "express";
 import { prisma } from "../db.js";
 import { z } from "zod";
 import { requireAuth } from "../middleware/auth.js";
+import { computeTenantRating } from "../services/rating.js";
 
 export const penaltyRouter = Router();
 
@@ -19,6 +20,9 @@ penaltyRouter.post("/late-payments/run", async (req, res) => {
     const pen = await prisma.penalty.create({ data: { agencyId, invoiceId: inv.id, type: "LATE_PAYMENT", amount, days, computedAt: today } });
     created.push(pen);
     await prisma.invoice.update({ where: { id: inv.id }, data: { status: "OVERDUE" } });
+    // Recompute rating for tenant on that lease
+    const lease = await prisma.lease.findUnique({ where: { id: inv.leaseId }, select: { tenantId: true } });
+    if (lease?.tenantId) await computeTenantRating(lease.tenantId);
   }
   res.json({ created: created.length });
 });
@@ -35,6 +39,8 @@ penaltyRouter.post("/overstay/run", async (req, res) => {
     const pen = await prisma.penalty.create({ data: { agencyId, noticeId: n.id, type: "OVERSTAY", amount, days, computedAt: today } });
     created.push(pen);
     await prisma.vacateNotice.update({ where: { id: n.id }, data: { status: "OVERDUE" } });
+    const lease = await prisma.lease.findUnique({ where: { id: n.leaseId }, select: { tenantId: true } });
+    if (lease?.tenantId) await computeTenantRating(lease.tenantId);
   }
   res.json({ created: created.length });
 });

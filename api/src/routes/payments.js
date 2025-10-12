@@ -2,6 +2,7 @@ import { Router } from "express";
 import { prisma } from "../db.js";
 import { z } from "zod";
 import { requireAuth } from "../middleware/auth.js";
+import { computeTenantRating } from "../services/rating.js";
 
 export const paymentRouter = Router();
 
@@ -43,6 +44,9 @@ paymentRouter.post("/", async (req, res) => {
     if (totalPaid >= (invoice?.amount || 0)) status = "PAID";
     await prisma.invoice.update({ where: { id: invoiceId }, data: { totalPaid, status } });
   }
+  // Recompute rating for tenant associated with this lease
+  const lease = await prisma.lease.findUnique({ where: { id: created.leaseId }, select: { tenantId: true } });
+  if (lease?.tenantId) await computeTenantRating(lease.tenantId);
   res.status(201).json(created);
 });
 
