@@ -90,7 +90,6 @@ model Tenant {
   agencyId  String   @db.ObjectId
   agency    Agency   @relation(fields: [agencyId], references: [id])
   leases    Lease[]
-  ratings   TenantRating[]
   vacateNotices VacateNotice[]
   averageRating Float @default(0)
   isHighRisk    Boolean @default(false)
@@ -254,14 +253,4 @@ model Penalty {
   computedAt DateTime     @default(now())
 }
 
-model TenantRating {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  tenantId  String   @db.ObjectId
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
-  propertyId String? @db.ObjectId
-  unitId     String? @db.ObjectId
-  stars     Int
-  comment   String?
-  ratedByUserId String @db.ObjectId
-  ratedAt   DateTime @default(now())
-}
+// Manual tenant ratings removed; system is fully automated
