@@ -6,7 +6,10 @@ import axios from 'axios';
 const PropertyPage = () => {
   const handlePropertySubmit = async (property) => {
     try {
-      await axios.post('/api/properties', property);
+      const token = localStorage.getItem('token');
+      await axios.post('/properties', property, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       alert('Property added successfully');
     } catch (error) {
       console.error(error);

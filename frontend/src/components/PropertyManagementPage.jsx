@@ -5,17 +5,17 @@ const PropertyManagementPage = () => {
   const [newProperty, setNewProperty] = useState({ address: '', type: '', description: '', isVacant: true });
 
   useEffect(() => {
-    // Fetch properties from API
-    fetch('/api/properties')
+    const token = localStorage.getItem('token');
+    fetch('/properties', { headers: token ? { Authorization: `Bearer ${token}` } : {} })
       .then(res => res.json())
       .then(data => setProperties(data));
   }, []);
 
   const handleAddProperty = () => {
-    // Add a new property
-    fetch('/api/properties', {
+    const token = localStorage.getItem('token');
+    fetch('/properties', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: JSON.stringify(newProperty),
     })
       .then(res => res.json())

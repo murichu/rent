@@ -5,7 +5,8 @@
   "scripts": {
     "start:backend": "yarn --cwd backend start",
     "start:frontend": "yarn --cwd frontend dev",
-    "start": "concurrently \"yarn start:backend\" \"yarn start:frontend\""
+    "start:api": "yarn --cwd api dev",
+    "dev": "concurrently \"yarn start:frontend\" \"yarn start:api\""
   },
   "keywords": [],
   "author": "",

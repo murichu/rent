@@ -15,7 +15,11 @@ const LoginForm = () => {
 
   const handleSubmit = async (values) => {
     try {
-      await axios.post('/api/login', values);
+      const res = await axios.post('/auth/login', values);
+      localStorage.setItem('token', res.data.token);
+      if (res.data?.user?.role) {
+        localStorage.setItem('role', res.data.user.role);
+      }
       navigate('/dashboard');
     } catch (error) {
       console.error(error);

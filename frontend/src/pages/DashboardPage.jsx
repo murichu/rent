@@ -9,7 +9,10 @@ const DashboardPage = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await axios.get('/api/dashboard-data');
+        const token = localStorage.getItem('token');
+        const response = await axios.get('/properties', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
         setData(response.data);
       } catch (error) {
         console.error(error);

@@ -1,0 +1,256 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum PropertyStatus {
+  AVAILABLE
+  OCCUPIED
+  MAINTENANCE
+  OFF_MARKET
+}
+
+model Agency {
+  id         String     @id @default(auto()) @map("_id") @db.ObjectId
+  name       String
+  invoiceDayOfMonth Int @default(28)
+  dueDayOfMonth     Int @default(5)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  users      User[]
+  properties Property[]
+  tenants    Tenant[]
+  leases     Lease[]
+  payments   Payment[]
+  invoices   Invoice[]
+  vacateNotices VacateNotice[]
+  penalties  Penalty[]
+}
+
+model User {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         Role     @default(USER)
+  agencyId     String   @db.ObjectId
+  agency       Agency   @relation(fields: [agencyId], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  propertyManagers PropertyManager[]
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+enum PropertyType {
+  SINGLE_ROOM
+  DOUBLE_ROOM
+  BEDSEATER
+  ONE_BEDROOM
+  TWO_BEDROOM
+  THREE_BEDROOM
+  MAISONETTE
+  BUNGALOW
+}
+
+model Property {
+  id         String         @id @default(auto()) @map("_id") @db.ObjectId
+  title      String
+  address    String
+  city       String?
+  state      String?
+  zip        String?
+  bedrooms   Int?
+  bathrooms  Float?
+  sizeSqFt   Int?
+  rentAmount Int?
+  status     PropertyStatus @default(AVAILABLE)
+  type       PropertyType
+  agencyId   String         @db.ObjectId
+  agency     Agency         @relation(fields: [agencyId], references: [id])
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  leases     Lease[]
+  units      Unit[]
+  managers   PropertyManager[]
+}
+
+model Tenant {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  email     String?
+  phone     String?
+  agencyId  String   @db.ObjectId
+  agency    Agency   @relation(fields: [agencyId], references: [id])
+  leases    Lease[]
+  vacateNotices VacateNotice[]
+  averageRating Float @default(0)
+  isHighRisk    Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Lease {
+  id                 String   @id @default(auto()) @map("_id") @db.ObjectId
+  propertyId         String?  @db.ObjectId
+  property           Property? @relation(fields: [propertyId], references: [id])
+  unitId             String?  @db.ObjectId
+  unit               Unit?    @relation(fields: [unitId], references: [id])
+  tenantId           String   @db.ObjectId
+  tenant             Tenant   @relation(fields: [tenantId], references: [id])
+  agencyId           String   @db.ObjectId
+  agency             Agency   @relation(fields: [agencyId], references: [id])
+  startDate          DateTime
+  endDate            DateTime?
+  rentAmount         Int
+  paymentDayOfMonth  Int
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  payments           Payment[]
+  invoices           Invoice[]
+  vacateNotices      VacateNotice[]
+  penalties          Penalty[]
+}
+
+enum UnitStatus {
+  VACANT
+  OCCUPIED
+  MAINTENANCE
+  OFF_MARKET
+}
+
+model Unit {
+  id         String     @id @default(auto()) @map("_id") @db.ObjectId
+  propertyId String     @db.ObjectId
+  property   Property   @relation(fields: [propertyId], references: [id])
+  unitNumber String
+  type       PropertyType
+  bedrooms   Int?
+  bathrooms  Float?
+  sizeSqFt   Int?
+  rentAmount Int
+  status     UnitStatus @default(VACANT)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  leases     Lease[]
+  vacateNotices VacateNotice[]
+}
+
+enum PaymentMethod {
+  MPESA_C2B
+  MANUAL
+}
+
+model Invoice {
+  id          String        @id @default(auto()) @map("_id") @db.ObjectId
+  leaseId     String        @db.ObjectId
+  lease       Lease         @relation(fields: [leaseId], references: [id])
+  agencyId    String        @db.ObjectId
+  agency      Agency        @relation(fields: [agencyId], references: [id])
+  amount      Int
+  periodYear  Int
+  periodMonth Int
+  issuedAt    DateTime
+  dueAt       DateTime
+  status      InvoiceStatus @default(PENDING)
+  totalPaid   Int           @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  payments    Payment[]
+  penalties   Penalty[]
+}
+
+enum InvoiceStatus {
+  PENDING
+  PARTIAL
+  PAID
+  OVERDUE
+}
+
+model Payment {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  leaseId   String   @db.ObjectId
+  lease     Lease    @relation(fields: [leaseId], references: [id])
+  amount    Int
+  paidAt    DateTime
+  method    PaymentMethod @default(MANUAL)
+  referenceNumber String?
+  notes     String?
+  invoiceId String?  @db.ObjectId
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id])
+  agencyId  String   @db.ObjectId
+  agency    Agency   @relation(fields: [agencyId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum ManagerRole {
+  LANDLORD
+  MANAGER
+  AGENCY
+}
+
+model PropertyManager {
+  id         String      @id @default(auto()) @map("_id") @db.ObjectId
+  propertyId String      @db.ObjectId
+  property   Property    @relation(fields: [propertyId], references: [id])
+  userId     String      @db.ObjectId
+  user       User        @relation(fields: [userId], references: [id])
+  role       ManagerRole
+  createdAt  DateTime    @default(now())
+}
+
+model VacateNotice {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  leaseId         String    @db.ObjectId
+  lease           Lease     @relation(fields: [leaseId], references: [id])
+  tenantId        String    @db.ObjectId
+  tenant          Tenant    @relation(fields: [tenantId], references: [id])
+  unitId          String?   @db.ObjectId
+  unit            Unit?     @relation(fields: [unitId], references: [id])
+  agencyId        String    @db.ObjectId
+  agency          Agency    @relation(fields: [agencyId], references: [id])
+  noticeDate      DateTime
+  plannedVacateAt DateTime
+  actualVacateAt  DateTime?
+  status          NoticeStatus @default(PENDING)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  penalties       Penalty[]
+}
+
+enum NoticeStatus {
+  PENDING
+  COMPLETED
+  OVERDUE
+}
+
+enum PenaltyType {
+  LATE_PAYMENT
+  OVERSTAY
+}
+
+model Penalty {
+  id         String      @id @default(auto()) @map("_id") @db.ObjectId
+  agencyId   String      @db.ObjectId
+  agency     Agency      @relation(fields: [agencyId], references: [id])
+  leaseId    String?     @db.ObjectId
+  lease      Lease?      @relation(fields: [leaseId], references: [id])
+  invoiceId  String?     @db.ObjectId
+  invoice    Invoice?    @relation(fields: [invoiceId], references: [id])
+  noticeId   String?     @db.ObjectId
+  notice     VacateNotice? @relation(fields: [noticeId], references: [id])
+  type       PenaltyType
+  amount     Int
+  days       Int          @default(0)
+  computedAt DateTime     @default(now())
+}
+
+// Manual tenant ratings removed; system is fully automated
