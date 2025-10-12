@@ -8,6 +8,8 @@ import { leaseRouter } from "./routes/leases.js";
 import { paymentRouter } from "./routes/payments.js";
 import { agencyRouter } from "./routes/agencies.js";
 import { usersRouter } from "./routes/users.js";
+import { invoiceRouter } from "./routes/invoices.js";
+import { dashboardRouter } from "./routes/dashboard.js";
 
 dotenv.config();
 
@@ -26,6 +28,8 @@ app.use("/leases", leaseRouter);
 app.use("/payments", paymentRouter);
 app.use("/agencies", agencyRouter);
 app.use("/users", usersRouter);
+app.use("/invoices", invoiceRouter);
+app.use("/dashboard", dashboardRouter);
 
 const port = process.env.PORT ? Number(process.env.PORT) : 4000;
 app.listen(port, () => {

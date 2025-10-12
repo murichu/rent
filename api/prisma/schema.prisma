@@ -17,6 +17,8 @@ enum PropertyStatus {
 model Agency {
   id         String     @id @default(auto()) @map("_id") @db.ObjectId
   name       String
+  invoiceDayOfMonth Int @default(28)
+  dueDayOfMonth     Int @default(5)
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
   users      User[]
@@ -24,6 +26,7 @@ model Agency {
   tenants    Tenant[]
   leases     Lease[]
   payments   Payment[]
+  invoices   Invoice[]
 }
 
 model User {
@@ -43,6 +46,17 @@ enum Role {
   USER
 }
 
+enum PropertyType {
+  SINGLE_ROOM
+  DOUBLE_ROOM
+  BEDSEATER
+  ONE_BEDROOM
+  TWO_BEDROOM
+  THREE_BEDROOM
+  MAISONETTE
+  BUNGALOW
+}
+
 model Property {
   id         String         @id @default(auto()) @map("_id") @db.ObjectId
   title      String
@@ -55,6 +69,7 @@ model Property {
   sizeSqFt   Int?
   rentAmount Int?
   status     PropertyStatus @default(AVAILABLE)
+  type       PropertyType
   agencyId   String         @db.ObjectId
   agency     Agency         @relation(fields: [agencyId], references: [id])
   createdAt  DateTime       @default(now())
@@ -89,6 +104,37 @@ model Lease {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   payments           Payment[]
+  invoices           Invoice[]
+}
+
+enum PaymentMethod {
+  MPESA_C2B
+  MANUAL
+}
+
+model Invoice {
+  id          String        @id @default(auto()) @map("_id") @db.ObjectId
+  leaseId     String        @db.ObjectId
+  lease       Lease         @relation(fields: [leaseId], references: [id])
+  agencyId    String        @db.ObjectId
+  agency      Agency        @relation(fields: [agencyId], references: [id])
+  amount      Int
+  periodYear  Int
+  periodMonth Int
+  issuedAt    DateTime
+  dueAt       DateTime
+  status      InvoiceStatus @default(PENDING)
+  totalPaid   Int           @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  payments    Payment[]
+}
+
+enum InvoiceStatus {
+  PENDING
+  PARTIAL
+  PAID
+  OVERDUE
 }
 
 model Payment {
@@ -97,8 +143,11 @@ model Payment {
   lease     Lease    @relation(fields: [leaseId], references: [id])
   amount    Int
   paidAt    DateTime
-  method    String?
+  method    PaymentMethod @default(MANUAL)
+  referenceNumber String?
   notes     String?
+  invoiceId String?  @db.ObjectId
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id])
   agencyId  String   @db.ObjectId
   agency    Agency   @relation(fields: [agencyId], references: [id])
   createdAt DateTime @default(now())
