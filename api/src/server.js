@@ -18,8 +18,14 @@ import { ratingRouter } from "./routes/ratings.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { apiLimiter, authLimiter } from "./middleware/rateLimiter.js";
 import logger, { morganStream } from "./utils/logger.js";
+import { initializeCronJobs } from "./jobs/cronJobs.js";
 
 dotenv.config();
+
+// Initialize cron jobs for automated tasks
+if (process.env.ENABLE_CRON_JOBS !== 'false') {
+  initializeCronJobs();
+}
 
 const app = express();
 
