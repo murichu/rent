@@ -27,6 +27,8 @@ model Agency {
   leases     Lease[]
   payments   Payment[]
   invoices   Invoice[]
+  vacateNotices VacateNotice[]
+  penalties  Penalty[]
 }
 
 model User {
@@ -39,6 +41,7 @@ model User {
   agency       Agency   @relation(fields: [agencyId], references: [id])
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  propertyManagers PropertyManager[]
 }
 
 enum Role {
@@ -75,6 +78,8 @@ model Property {
   createdAt  DateTime       @default(now())
   updatedAt  DateTime       @updatedAt
   leases     Lease[]
+  units      Unit[]
+  managers   PropertyManager[]
 }
 
 model Tenant {
@@ -85,14 +90,20 @@ model Tenant {
   agencyId  String   @db.ObjectId
   agency    Agency   @relation(fields: [agencyId], references: [id])
   leases    Lease[]
+  ratings   TenantRating[]
+  vacateNotices VacateNotice[]
+  averageRating Float @default(0)
+  isHighRisk    Boolean @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model Lease {
   id                 String   @id @default(auto()) @map("_id") @db.ObjectId
-  propertyId         String   @db.ObjectId
-  property           Property @relation(fields: [propertyId], references: [id])
+  propertyId         String?  @db.ObjectId
+  property           Property? @relation(fields: [propertyId], references: [id])
+  unitId             String?  @db.ObjectId
+  unit               Unit?    @relation(fields: [unitId], references: [id])
   tenantId           String   @db.ObjectId
   tenant             Tenant   @relation(fields: [tenantId], references: [id])
   agencyId           String   @db.ObjectId
@@ -105,6 +116,32 @@ model Lease {
   updatedAt          DateTime @updatedAt
   payments           Payment[]
   invoices           Invoice[]
+  vacateNotices      VacateNotice[]
+  penalties          Penalty[]
+}
+
+enum UnitStatus {
+  VACANT
+  OCCUPIED
+  MAINTENANCE
+  OFF_MARKET
+}
+
+model Unit {
+  id         String     @id @default(auto()) @map("_id") @db.ObjectId
+  propertyId String     @db.ObjectId
+  property   Property   @relation(fields: [propertyId], references: [id])
+  unitNumber String
+  type       PropertyType
+  bedrooms   Int?
+  bathrooms  Float?
+  sizeSqFt   Int?
+  rentAmount Int
+  status     UnitStatus @default(VACANT)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  leases     Lease[]
+  vacateNotices VacateNotice[]
 }
 
 enum PaymentMethod {
@@ -128,6 +165,7 @@ model Invoice {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
   payments    Payment[]
+  penalties   Penalty[]
 }
 
 enum InvoiceStatus {
@@ -152,4 +190,78 @@ model Payment {
   agency    Agency   @relation(fields: [agencyId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+enum ManagerRole {
+  LANDLORD
+  MANAGER
+  AGENCY
+}
+
+model PropertyManager {
+  id         String      @id @default(auto()) @map("_id") @db.ObjectId
+  propertyId String      @db.ObjectId
+  property   Property    @relation(fields: [propertyId], references: [id])
+  userId     String      @db.ObjectId
+  user       User        @relation(fields: [userId], references: [id])
+  role       ManagerRole
+  createdAt  DateTime    @default(now())
+}
+
+model VacateNotice {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  leaseId         String    @db.ObjectId
+  lease           Lease     @relation(fields: [leaseId], references: [id])
+  tenantId        String    @db.ObjectId
+  tenant          Tenant    @relation(fields: [tenantId], references: [id])
+  unitId          String?   @db.ObjectId
+  unit            Unit?     @relation(fields: [unitId], references: [id])
+  agencyId        String    @db.ObjectId
+  agency          Agency    @relation(fields: [agencyId], references: [id])
+  noticeDate      DateTime
+  plannedVacateAt DateTime
+  actualVacateAt  DateTime?
+  status          NoticeStatus @default(PENDING)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  penalties       Penalty[]
+}
+
+enum NoticeStatus {
+  PENDING
+  COMPLETED
+  OVERDUE
+}
+
+enum PenaltyType {
+  LATE_PAYMENT
+  OVERSTAY
+}
+
+model Penalty {
+  id         String      @id @default(auto()) @map("_id") @db.ObjectId
+  agencyId   String      @db.ObjectId
+  agency     Agency      @relation(fields: [agencyId], references: [id])
+  leaseId    String?     @db.ObjectId
+  lease      Lease?      @relation(fields: [leaseId], references: [id])
+  invoiceId  String?     @db.ObjectId
+  invoice    Invoice?    @relation(fields: [invoiceId], references: [id])
+  noticeId   String?     @db.ObjectId
+  notice     VacateNotice? @relation(fields: [noticeId], references: [id])
+  type       PenaltyType
+  amount     Int
+  days       Int          @default(0)
+  computedAt DateTime     @default(now())
+}
+
+model TenantRating {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId  String   @db.ObjectId
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  propertyId String? @db.ObjectId
+  unitId     String? @db.ObjectId
+  stars     Int
+  comment   String?
+  ratedByUserId String @db.ObjectId
+  ratedAt   DateTime @default(now())
 }

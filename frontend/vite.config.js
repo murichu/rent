@@ -42,6 +42,22 @@ export default defineConfig({
         target: "http://localhost:4000",
         changeOrigin: true,
       },
+      "/units": {
+        target: "http://localhost:4000",
+        changeOrigin: true,
+      },
+      "/notices": {
+        target: "http://localhost:4000",
+        changeOrigin: true,
+      },
+      "/penalties": {
+        target: "http://localhost:4000",
+        changeOrigin: true,
+      },
+      "/ratings": {
+        target: "http://localhost:4000",
+        changeOrigin: true,
+      },
     },
   },
 })
