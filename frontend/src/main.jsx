@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import App from './App.jsx'
 import './index.css'
 import axios from 'axios'
+import { ThemeProvider } from './context/ThemeContext'
 
 // Attach token if present
 axios.interceptors.request.use((config) => {
@@ -16,6 +17,8 @@ axios.interceptors.request.use((config) => {
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <App />
+    <ThemeProvider>
+      <App />
+    </ThemeProvider>
   </StrictMode>,
 )
