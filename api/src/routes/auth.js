@@ -3,6 +3,7 @@ import { prisma } from "../db.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
+import { requireAuth, requireAdmin } from "../middleware/auth.js";
 
 export const authRouter = Router();
 
@@ -29,16 +30,17 @@ authRouter.post("/register", async (req, res) => {
       name,
       passwordHash,
       agencyId: agency.id,
+      role: "ADMIN",
     },
   });
 
   const token = jwt.sign(
-    { userId: user.id, agencyId: agency.id, email: user.email, name: user.name },
+    { userId: user.id, agencyId: agency.id, email: user.email, name: user.name, role: user.role },
     process.env.JWT_SECRET || "dev-secret",
     { expiresIn: "7d" }
   );
 
-  res.status(201).json({ token, user: { id: user.id, email: user.email, name: user.name }, agency });
+  res.status(201).json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role }, agency });
 });
 
 const loginSchema = z.object({ email: z.string().email(), password: z.string().min(6) });
@@ -54,10 +56,39 @@ authRouter.post("/login", async (req, res) => {
   if (!ok) return res.status(401).json({ error: "Invalid credentials" });
 
   const token = jwt.sign(
-    { userId: user.id, agencyId: user.agencyId, email: user.email, name: user.name },
+    { userId: user.id, agencyId: user.agencyId, email: user.email, name: user.name, role: user.role },
     process.env.JWT_SECRET || "dev-secret",
     { expiresIn: "7d" }
   );
 
-  res.json({ token, user: { id: user.id, email: user.email, name: user.name } });
+  res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+});
+
+// Admin can create additional users within agency
+const createUserSchema = z.object({
+  name: z.string().min(2),
+  email: z.string().email(),
+  password: z.string().min(6),
+  role: z.enum(["ADMIN", "USER"]).optional(),
+});
+
+authRouter.post("/create-user", requireAuth, requireAdmin, async (req, res) => {
+  const parsed = createUserSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json(parsed.error.flatten());
+  const { name, email, password, role } = parsed.data;
+
+  const exists = await prisma.user.findUnique({ where: { email } });
+  if (exists) return res.status(409).json({ error: "Email already in use" });
+
+  const passwordHash = await bcrypt.hash(password, 10);
+  const user = await prisma.user.create({
+    data: {
+      name,
+      email,
+      passwordHash,
+      role: role || "USER",
+      agencyId: req.user.agencyId,
+    },
+  });
+  res.status(201).json({ id: user.id, email: user.email, name: user.name, role: user.role });
 });

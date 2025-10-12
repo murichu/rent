@@ -7,6 +7,7 @@ import { tenantRouter } from "./routes/tenants.js";
 import { leaseRouter } from "./routes/leases.js";
 import { paymentRouter } from "./routes/payments.js";
 import { agencyRouter } from "./routes/agencies.js";
+import { usersRouter } from "./routes/users.js";
 
 dotenv.config();
 
@@ -24,6 +25,7 @@ app.use("/tenants", tenantRouter);
 app.use("/leases", leaseRouter);
 app.use("/payments", paymentRouter);
 app.use("/agencies", agencyRouter);
+app.use("/users", usersRouter);
 
 const port = process.env.PORT ? Number(process.env.PORT) : 4000;
 app.listen(port, () => {

@@ -16,20 +16,18 @@ const paymentSchema = z.object({
 });
 
 paymentRouter.get("/", async (req, res) => {
-  const agencyId = (req as any).user!.agencyId;
-  const items = await prisma.payment.findMany({ where: { agencyId } });
+  const items = await prisma.payment.findMany({ where: { agencyId: req.user.agencyId } });
   res.json(items);
 });
 
 paymentRouter.post("/", async (req, res) => {
-  const agencyId = (req as any).user!.agencyId;
   const parsed = paymentSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json(parsed.error.flatten());
   const { leaseId, ...rest } = parsed.data;
   const created = await prisma.payment.create({
     data: {
       leaseId,
-      agencyId,
+      agencyId: req.user.agencyId,
       ...rest,
     },
   });
@@ -37,25 +35,22 @@ paymentRouter.post("/", async (req, res) => {
 });
 
 paymentRouter.get(":id", async (req, res) => {
-  const agencyId = (req as any).user!.agencyId;
-  const item = await prisma.payment.findFirst({ where: { id: req.params.id, agencyId } });
+  const item = await prisma.payment.findFirst({ where: { id: req.params.id, agencyId: req.user.agencyId } });
   if (!item) return res.status(404).json({ error: "Not found" });
   res.json(item);
 });
 
 paymentRouter.put(":id", async (req, res) => {
-  const agencyId = (req as any).user!.agencyId;
   const parsed = paymentSchema.partial().safeParse(req.body);
   if (!parsed.success) return res.status(400).json(parsed.error.flatten());
-  const existing = await prisma.payment.findFirst({ where: { id: req.params.id, agencyId } });
+  const existing = await prisma.payment.findFirst({ where: { id: req.params.id, agencyId: req.user.agencyId } });
   if (!existing) return res.status(404).json({ error: "Not found" });
   const updated = await prisma.payment.update({ where: { id: existing.id }, data: parsed.data });
   res.json(updated);
 });
 
 paymentRouter.delete(":id", async (req, res) => {
-  const agencyId = (req as any).user!.agencyId;
-  const existing = await prisma.payment.findFirst({ where: { id: req.params.id, agencyId } });
+  const existing = await prisma.payment.findFirst({ where: { id: req.params.id, agencyId: req.user.agencyId } });
   if (!existing) return res.status(404).json({ error: "Not found" });
   await prisma.payment.delete({ where: { id: existing.id } });
   res.status(204).end();

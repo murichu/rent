@@ -8,8 +8,7 @@ export const agencyRouter = Router();
 agencyRouter.use(requireAuth);
 
 agencyRouter.get("/me", async (req, res) => {
-  const agencyId = (req as any).user!.agencyId;
-  const agency = await prisma.agency.findUnique({ where: { id: agencyId } });
+  const agency = await prisma.agency.findUnique({ where: { id: req.user.agencyId } });
   if (!agency) return res.status(404).json({ error: "Not found" });
   res.json(agency);
 });
@@ -17,9 +16,8 @@ agencyRouter.get("/me", async (req, res) => {
 const updateSchema = z.object({ name: z.string().min(2) });
 
 agencyRouter.put("/me", async (req, res) => {
-  const agencyId = (req as any).user!.agencyId;
   const parsed = updateSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json(parsed.error.flatten());
-  const updated = await prisma.agency.update({ where: { id: agencyId }, data: parsed.data });
+  const updated = await prisma.agency.update({ where: { id: req.user.agencyId }, data: parsed.data });
   res.json(updated);
 });
