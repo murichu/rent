@@ -9,7 +9,7 @@ PORT=4000
 ```
 
 Commands:
-- `yarn dev` - start API in watch mode
-- `yarn prisma:generate` - generate Prisma Client
-- `yarn prisma:push` - push schema to Mongo
-- `yarn seed` - seed database
+- `npm run dev` - start API in watch mode
+- `npm run prisma:generate` - generate Prisma Client
+- `npm run prisma:push` - push schema to Mongo
+- `npm run seed` - seed database

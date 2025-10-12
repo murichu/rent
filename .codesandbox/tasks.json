@@ -3,7 +3,7 @@
   "setupTasks": [
     {
       "name": "Installing Dependencies",
-      "command": "yarn install"
+      "command": "npm install"
     }
   ],
 
@@ -11,15 +11,15 @@
   "tasks": {
     "start:backend": {
       "name": "start:backend",
-      "command": "yarn start:backend"
+      "command": "npm run start:backend"
     },
     "start:frontend": {
       "name": "start:frontend",
-      "command": "yarn start:frontend"
+      "command": "npm run start:frontend"
     },
-    "start": {
-      "name": "start",
-      "command": "yarn start",
+    "dev": {
+      "name": "dev",
+      "command": "npm run dev",
       "runAtStart": true
     }
   }

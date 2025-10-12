@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "start:backend": "yarn --cwd backend start",
-    "start:frontend": "yarn --cwd frontend dev",
-    "start:api": "yarn --cwd api dev",
-    "dev": "concurrently \"yarn start:frontend\" \"yarn start:api\""
+    "start:backend": "npm --prefix backend start",
+    "start:frontend": "npm --prefix frontend run dev",
+    "start:api": "npm --prefix api run dev",
+    "dev": "concurrently \"npm run start:frontend\" \"npm run start:api\""
   },
   "keywords": [],
   "author": "",
