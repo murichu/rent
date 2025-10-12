@@ -5,10 +5,10 @@ const MaintenanceRequestForm = () => {
   const [request, setRequest] = useState({ propertyId: '', description: '' });
 
   const handleSubmit = () => {
-    // Submit maintenance request
-    fetch('/api/maintenance', {
+    const token = localStorage.getItem('token');
+    fetch('/leases', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: JSON.stringify(request),
     })
       .then(res => res.json())

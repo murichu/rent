@@ -1,0 +1,100 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum PropertyStatus {
+  AVAILABLE
+  OCCUPIED
+  MAINTENANCE
+  OFF_MARKET
+}
+
+model Agency {
+  id         String     @id @default(auto()) @map("_id") @db.ObjectId
+  name       String
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  users      User[]
+  properties Property[]
+  tenants    Tenant[]
+  leases     Lease[]
+  payments   Payment[]
+}
+
+model User {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  email        String   @unique
+  passwordHash String
+  name         String
+  agencyId     String   @db.ObjectId
+  agency       Agency   @relation(fields: [agencyId], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Property {
+  id         String         @id @default(auto()) @map("_id") @db.ObjectId
+  title      String
+  address    String
+  city       String?
+  state      String?
+  zip        String?
+  bedrooms   Int?
+  bathrooms  Float?
+  sizeSqFt   Int?
+  rentAmount Int?
+  status     PropertyStatus @default(AVAILABLE)
+  agencyId   String         @db.ObjectId
+  agency     Agency         @relation(fields: [agencyId], references: [id])
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  leases     Lease[]
+}
+
+model Tenant {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  email     String?
+  phone     String?
+  agencyId  String   @db.ObjectId
+  agency    Agency   @relation(fields: [agencyId], references: [id])
+  leases    Lease[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Lease {
+  id                 String   @id @default(auto()) @map("_id") @db.ObjectId
+  propertyId         String   @db.ObjectId
+  property           Property @relation(fields: [propertyId], references: [id])
+  tenantId           String   @db.ObjectId
+  tenant             Tenant   @relation(fields: [tenantId], references: [id])
+  agencyId           String   @db.ObjectId
+  agency             Agency   @relation(fields: [agencyId], references: [id])
+  startDate          DateTime
+  endDate            DateTime?
+  rentAmount         Int
+  paymentDayOfMonth  Int
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  payments           Payment[]
+}
+
+model Payment {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  leaseId   String   @db.ObjectId
+  lease     Lease    @relation(fields: [leaseId], references: [id])
+  amount    Int
+  paidAt    DateTime
+  method    String?
+  notes     String?
+  agencyId  String   @db.ObjectId
+  agency    Agency   @relation(fields: [agencyId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

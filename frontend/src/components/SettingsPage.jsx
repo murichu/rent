@@ -4,18 +4,19 @@ const SettingsPage = () => {
   const [settings, setSettings] = useState({ theme: 'light', notifications: true });
 
   useEffect(() => {
-    // Fetch current settings from API
-    fetch('/api/settings')
+    const token = localStorage.getItem('token');
+    fetch('/agencies/me', { headers: token ? { Authorization: `Bearer ${token}` } : {} })
       .then(res => res.json())
-      .then(data => setSettings(data));
+      .then(data => setSettings({ ...settings, name: data.name }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSave = () => {
-    // Save settings
-    fetch('/api/settings', {
+    const token = localStorage.getItem('token');
+    fetch('/agencies/me', {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(settings),
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ name: settings.name || 'My Agency' }),
     })
       .then(res => res.json())
       .then(data => console.log('Settings saved:', data));

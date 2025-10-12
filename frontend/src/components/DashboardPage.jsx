@@ -11,15 +11,19 @@ const DashboardPage = () => {
   const [vacantProperties, setVacantProperties] = useState([]);
 
   useEffect(() => {
-    // Fetch report data
-    fetch('/api/reports/dashboard')
+    const token = localStorage.getItem('token');
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    fetch('/leases', { headers })
       .then(res => res.json())
-      .then(data => setReportData(data));
+      .then(data => {
+        const labels = data.map((l) => new Date(l.startDate).toLocaleDateString());
+        const values = data.map((l) => l.rentAmount);
+        setReportData({ labels, datasets: [{ label: 'Leases', data: values }] });
+      });
 
-    // Fetch vacant properties
-    fetch('/api/properties/vacant')
+    fetch('/properties', { headers })
       .then(res => res.json())
-      .then(data => setVacantProperties(data));
+      .then(data => setVacantProperties(data.filter((p) => p.status === 'AVAILABLE')));
   }, []);
 
   return (

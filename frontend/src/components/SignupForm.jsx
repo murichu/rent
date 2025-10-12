@@ -18,7 +18,12 @@ const SignupForm = () => {
 
   const handleSubmit = async (values) => {
     try {
-      await axios.post('/api/signup', values);
+      await axios.post('/auth/register', {
+        agencyName: values.agencyName || 'My Agency',
+        name: values.name || 'Owner',
+        email: values.email,
+        password: values.password,
+      });
       navigate('/login');
     } catch (error) {
       console.error(error);
@@ -27,12 +32,20 @@ const SignupForm = () => {
 
   return (
     <Formik
-      initialValues={{ email: '', password: '', confirmPassword: '' }}
+      initialValues={{ agencyName: '', name: '', email: '', password: '', confirmPassword: '' }}
       validationSchema={SignupSchema}
       onSubmit={handleSubmit}
     >
       {({ errors, touched }) => (
         <Form>
+          <div>
+            <label htmlFor="agencyName">Agency Name</label>
+            <Field name="agencyName" type="text" />
+          </div>
+          <div>
+            <label htmlFor="name">Your Name</label>
+            <Field name="name" type="text" />
+          </div>
           <div>
             <label htmlFor="email">Email</label>
             <Field name="email" type="email" />
