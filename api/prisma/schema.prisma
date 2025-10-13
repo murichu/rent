@@ -32,6 +32,7 @@ model Agency {
   mpesaTransactions MpesaTransaction[]
   mpesaB2CTransactions MpesaB2CTransaction[]
   mpesaReversals MpesaReversal[]
+  kcbTransactions KcbTransaction[]
 }
 
 model User {
@@ -126,6 +127,7 @@ model Lease {
   vacateNotices      VacateNotice[]
   penalties          Penalty[]
   mpesaTransactions  MpesaTransaction[]
+  kcbTransactions    KcbTransaction[]
 }
 
 enum UnitStatus {
@@ -402,6 +404,58 @@ model MpesaBalanceCheck {
 
   @@index([conversationId])
   @@index([completedAt])
+}
+
+// KCB Buni Transactions (All types)
+model KcbTransaction {
+  id                      String    @id @default(auto()) @map("_id") @db.ObjectId
+  transactionRef          String    @unique
+  checkoutRequestId       String?   // For M-Pesa STK
+  phoneNumber             String?   // For M-Pesa/PesaLink
+  amount                  Int
+  accountReference        String?
+  narrative               String?
+  type                    String    // MPESA_STK, SEND_TO_BANK, BANK_TO_BANK, PESALINK
+  status                  String    @default("PENDING") // PENDING, SUCCESS, FAILED
+  responseCode            String?
+  responseDescription     String?
+  transactionId           String?   // KCB transaction ID
+  mpesaReceiptNumber      String?   // For M-Pesa transactions
+  transactionDate         DateTime?
+  resultCode              String?
+  resultDescription       String?
+  destinationBank         String?   // Bank code for inter-bank
+  destinationAccount      String?   // Destination account number
+  destinationAccountName  String?   // Destination account name
+  leaseId                 String?   @db.ObjectId
+  lease                   Lease?    @relation(fields: [leaseId], references: [id])
+  agencyId                String?   @db.ObjectId
+  agency                  Agency?   @relation(fields: [agencyId], references: [id])
+  createdAt               DateTime  @default(now())
+  completedAt             DateTime?
+  updatedAt               DateTime  @updatedAt
+
+  @@index([transactionRef])
+  @@index([checkoutRequestId])
+  @@index([phoneNumber])
+  @@index([status])
+  @@index([type])
+  @@index([leaseId])
+}
+
+// KCB Account Statement Requests
+model KcbStatementRequest {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  accountNumber     String
+  startDate         DateTime
+  endDate           DateTime
+  transactionCount  Int       @default(0)
+  status            String    @default("PENDING") // PENDING, SUCCESS, FAILED
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([accountNumber])
+  @@index([createdAt])
 }
 
 // Manual tenant ratings removed; system is fully automated

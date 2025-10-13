@@ -101,6 +101,7 @@ v1Router.use("/penalties", penaltyRouter);
 v1Router.use("/ratings", ratingRouter);
 v1Router.use("/2fa", twoFactorRouter);
 v1Router.use("/mpesa", mpesaRouter);
+v1Router.use("/kcb", kcbRouter);
 
 // Mount v1 router
 app.use("/api/v1", v1Router);

@@ -194,7 +194,7 @@ const api = {
     regenerateBackupCodes: (token) => apiClient.post('/2fa/regenerate-backup-codes', { token }),
   },
 
-  // M-Pesa Payments
+  // M-Pesa Payments (Safaricom Daraja)
   mpesa: {
     // C2B STK Push
     initiateStkPush: (data) => apiClient.post('/mpesa/stk-push', data),
@@ -212,6 +212,32 @@ const api = {
     // Account Balance
     checkBalance: () => apiClient.post('/mpesa/balance'),
     getLatestBalance: () => apiClient.get('/mpesa/balance/latest'),
+  },
+
+  // KCB Buni Banking APIs
+  kcb: {
+    // M-Pesa STK Push (via KCB)
+    initiateStkPush: (data) => apiClient.post('/kcb/stk-push', data),
+    getStatus: (transactionRef) => apiClient.get(`/kcb/status/${transactionRef}`),
+    
+    // Account Statement
+    getStatement: (data) => apiClient.post('/kcb/statement', data),
+    getBalance: () => apiClient.get('/kcb/balance'),
+    
+    // Send to Bank (Inter-bank)
+    sendToBank: (data) => apiClient.post('/kcb/send-to-bank', data),
+    
+    // Bank to Bank (KCB internal)
+    bankToBank: (data) => apiClient.post('/kcb/bank-to-bank', data),
+    
+    // PesaLink
+    sendViaPesaLink: (data) => apiClient.post('/kcb/pesalink', data),
+    
+    // Transactions
+    getTransactions: (params) => apiClient.get('/kcb/transactions', { params }),
+    
+    // Bank Codes
+    getBankCodes: () => apiClient.get('/kcb/bank-codes'),
   },
 };
 
