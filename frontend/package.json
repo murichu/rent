@@ -37,11 +37,14 @@
     "react-image-gallery": "^1.4.0",
     "react-joyride": "^2.9.3",
     "react-leaflet": "^4.2.1",
+    "react-photoswipe-gallery": "^4.0.0",
     "react-router-dom": "^6.26.0",
     "react-toastify": "^10.0.5",
     "react-tooltip": "^5.30.0",
     "socket.io-client": "^4.8.1",
     "speakeasy": "^2.0.0",
+    "swiper": "^12.0.2",
+    "yet-another-react-lightbox": "^3.25.0",
     "yup": "^1.4.0"
   },
   "devDependencies": {
