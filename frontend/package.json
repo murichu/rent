@@ -1,7 +1,8 @@
 {
-  "name": "frontend",
+  "name": "haven-frontend",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "description": "Haven Frontend - Property Management System",
   "type": "module",
   "scripts": {
     "dev": "vite",

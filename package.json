@@ -1,6 +1,7 @@
 {
-  "name": "rent",
+  "name": "haven",
   "version": "1.0.0",
+  "description": "Haven - Property Management System",
   "main": "index.js",
   "scripts": {
     "start:backend": "npm --prefix backend start",

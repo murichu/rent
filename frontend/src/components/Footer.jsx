@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import HavenLogo from './Logo/HavenLogo';
 
 const Footer = () => (
   <footer 
@@ -7,11 +8,13 @@ const Footer = () => (
     role="contentinfo"
     aria-label="Site footer"
   >
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         {/* Company Info */}
         <div>
-          <h3 className="text-lg font-semibold mb-4">Property Manager</h3>
+          <div className="mb-4">
+            <HavenLogo size="md" showText={true} />
+          </div>
           <p className="text-gray-400 text-sm">
             Comprehensive property rental management solution for modern property managers.
           </p>
@@ -51,7 +54,7 @@ const Footer = () => (
       </div>
 
       <div className="border-t border-gray-700 mt-8 pt-6 text-center text-sm text-gray-400">
-        <p>&copy; {new Date().getFullYear()} Property Management. All rights reserved.</p>
+        <p>&copy; {new Date().getFullYear()} Haven - Property Management System. All rights reserved.</p>
       </div>
     </div>
   </footer>

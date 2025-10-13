@@ -1,8 +1,17 @@
-# Property Rental Management SaaS
+# Haven - Property Management System
 
-A **world-class**, enterprise-grade property rental management system with 19 advanced UX features, AI-powered insights, and real-time capabilities.
+<div align="center">
+  <img src="frontend/public/logo.svg" alt="Haven Logo" width="120" height="120" />
+  
+  <h1>Haven</h1>
+  <p><strong>Property Management System</strong></p>
+  
+  <p>A <strong>world-class</strong>, enterprise-grade property rental management system with 19 advanced UX features, AI-powered insights, and real-time capabilities.</p>
+  
+  <p><strong>Built with:</strong> React 18, Node.js, Express, Prisma, MongoDB, Socket.IO, and 25+ modern libraries.</p>
+</div>
 
-**Built with:** React 18, Node.js, Express, Prisma, MongoDB, Socket.IO, and 25+ modern libraries.
+---
 
 ## ✨ **19 Advanced Features Implemented**
 

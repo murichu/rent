@@ -4,6 +4,7 @@ import DarkModeToggle from './DarkModeToggle';
 import NotificationCenter from './Notifications/NotificationCenter';
 import CommandPalette from './Search/CommandPalette';
 import LanguageSwitcher from './Settings/LanguageSwitcher';
+import HavenLogo from './Logo/HavenLogo';
 import { useTranslation } from 'react-i18next';
 
 const Navbar = () => {
@@ -39,12 +40,10 @@ const Navbar = () => {
           {/* Logo */}
           <Link 
             to="/" 
-            className="flex items-center space-x-2 text-xl font-bold hover:text-blue-400 transition-colors"
-            aria-label="Home"
+            className="hover:opacity-80 transition-opacity"
+            aria-label="Haven - Home"
           >
-            <span className="text-2xl">🏠</span>
-            <span className="hidden sm:inline">Property Manager</span>
-            <span className="sm:hidden">PM</span>
+            <HavenLogo size="sm" showText={true} />
           </Link>
 
           {/* Desktop Navigation */}

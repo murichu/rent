@@ -9,8 +9,9 @@ const ProductTour = ({ run = false, onComplete }) => {
       target: 'body',
       content: (
         <div>
-          <h2 className="text-2xl font-bold mb-2">Welcome to Property Manager! 🏠</h2>
-          <p>Let's take a quick tour to help you get started.</p>
+          <h2 className="text-2xl font-bold mb-2">Welcome to Haven! 🏠</h2>
+          <p className="text-gray-600">Your property management system</p>
+          <p className="mt-2">Let's take a quick tour to help you get started.</p>
         </div>
       ),
       placement: 'center',

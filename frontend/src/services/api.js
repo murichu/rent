@@ -4,6 +4,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 const API_VERSION = '/api/v1';
 
 /**
+ * Haven API Client
  * Create axios instance with defaults
  */
 const apiClient = axios.create({
@@ -11,6 +12,8 @@ const apiClient = axios.create({
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
+    'X-App-Name': 'Haven',
+    'X-App-Version': '1.0.0',
   },
 });
 

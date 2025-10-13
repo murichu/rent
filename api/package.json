@@ -1,6 +1,7 @@
 {
-  "name": "api",
-  "version": "0.1.0",
+  "name": "haven-api",
+  "version": "1.0.0",
+  "description": "Haven API - Property Management System Backend",
   "private": true,
   "type": "module",
   "scripts": {
