@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import DarkModeToggle from './DarkModeToggle';
 import NotificationCenter from './Notifications/NotificationCenter';
 import CommandPalette from './Search/CommandPalette';
+import LanguageSwitcher from './Settings/LanguageSwitcher';
+import { useTranslation } from 'react-i18next';
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
