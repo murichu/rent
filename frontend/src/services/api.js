@@ -239,6 +239,15 @@ const api = {
     // Bank Codes
     getBankCodes: () => apiClient.get('/kcb/bank-codes'),
   },
+
+  // Pesapal Card Payments (Kenya)
+  pesapal: {
+    calculateFees: (amount) => apiClient.post('/pesapal/calculate-fees', { amount }),
+    initiate: (data) => apiClient.post('/pesapal/initiate', data),
+    getStatus: (orderTrackingId) => apiClient.get(`/pesapal/status/${orderTrackingId}`),
+    getStatusDetailed: (merchantRef) => apiClient.get(`/pesapal/status-detailed/${merchantRef}`),
+    getTransactions: (params) => apiClient.get('/pesapal/transactions', { params }),
+  },
 };
 
 export default api;

@@ -142,6 +142,7 @@ model Lease {
   inspections        Inspection[]
   agentLeases        AgentLease[]
   securityDeposit    SecurityDeposit?
+  pesapalTransactions PesapalTransaction[]
 }
 
 enum UnitStatus {
