@@ -22,3 +22,14 @@ createRoot(document.getElementById('root')).render(
     </ThemeProvider>
   </StrictMode>,
 )
+
+// Register service worker for PWA
+serviceWorkerRegistration.register({
+  onSuccess: () => console.log('✅ App ready for offline use'),
+  onUpdate: (registration) => {
+    console.log('🔄 New version available');
+    if (confirm('New version available! Reload to update?')) {
+      window.location.reload();
+    }
+  },
+})
