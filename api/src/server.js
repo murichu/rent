@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import morgan from "morgan";
+import helmet from "helmet";
 import { authRouter } from "./routes/auth.js";
 import { propertyRouter } from "./routes/properties.js";
 import { tenantRouter } from "./routes/tenants.js";
@@ -28,6 +29,24 @@ if (process.env.ENABLE_CRON_JOBS !== 'false') {
 }
 
 const app = express();
+
+// Security middleware with Helmet
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", process.env.FRONTEND_URL || "http://localhost:5173"],
+      fontSrc: ["'self'", "data:"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'none'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}));
 
 // Logging middleware with Winston
 app.use(morgan(
@@ -81,6 +100,7 @@ v1Router.use("/notices", noticeRouter);
 v1Router.use("/penalties", penaltyRouter);
 v1Router.use("/ratings", ratingRouter);
 v1Router.use("/2fa", twoFactorRouter);
+v1Router.use("/mpesa", mpesaRouter);
 
 // Mount v1 router
 app.use("/api/v1", v1Router);

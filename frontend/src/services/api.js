@@ -193,6 +193,14 @@ const api = {
     verifyEmailOTP: (otp) => apiClient.post('/2fa/verify-email-otp', { otp }),
     regenerateBackupCodes: (token) => apiClient.post('/2fa/regenerate-backup-codes', { token }),
   },
+
+  // M-Pesa Payments
+  mpesa: {
+    initiateStkPush: (data) => apiClient.post('/mpesa/stk-push', data),
+    getStatus: (checkoutRequestId) => apiClient.get(`/mpesa/status/${checkoutRequestId}`),
+    getTransactions: (params) => apiClient.get('/mpesa/transactions', { params }),
+    getTransaction: (id) => apiClient.get(`/mpesa/transactions/${id}`),
+  },
 };
 
 export default api;

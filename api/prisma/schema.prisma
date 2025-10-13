@@ -29,6 +29,7 @@ model Agency {
   invoices   Invoice[]
   vacateNotices VacateNotice[]
   penalties  Penalty[]
+  mpesaTransactions MpesaTransaction[]
 }
 
 model User {
@@ -122,6 +123,7 @@ model Lease {
   invoices           Invoice[]
   vacateNotices      VacateNotice[]
   penalties          Penalty[]
+  mpesaTransactions  MpesaTransaction[]
 }
 
 enum UnitStatus {
@@ -296,6 +298,36 @@ model TwoFactorSecret {
   backupCodes String[] @default([])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+// M-Pesa Daraja API Transactions
+model MpesaTransaction {
+  id                   String    @id @default(auto()) @map("_id") @db.ObjectId
+  merchantRequestId    String
+  checkoutRequestId    String    @unique
+  phoneNumber          String
+  amount               Int
+  accountReference     String
+  transactionDesc      String?
+  status               String    @default("PENDING") // PENDING, SUCCESS, FAILED, CANCELLED
+  responseCode         String?
+  responseDescription  String?
+  mpesaReceiptNumber   String?
+  transactionDate      DateTime?
+  resultCode           String?
+  resultDescription    String?
+  leaseId              String?   @db.ObjectId
+  lease                Lease?    @relation(fields: [leaseId], references: [id])
+  agencyId             String?   @db.ObjectId
+  agency               Agency?   @relation(fields: [agencyId], references: [id])
+  createdAt            DateTime  @default(now())
+  completedAt          DateTime?
+  updatedAt            DateTime  @updatedAt
+
+  @@index([checkoutRequestId])
+  @@index([phoneNumber])
+  @@index([status])
+  @@index([leaseId])
 }
 
 // Manual tenant ratings removed; system is fully automated
