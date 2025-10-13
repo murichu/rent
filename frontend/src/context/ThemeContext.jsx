@@ -3,34 +3,70 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 const ThemeContext = createContext();
 
 export const ThemeProvider = ({ children }) => {
-  const [isDarkMode, setIsDarkMode] = useState(() => {
+  const [themeMode, setThemeMode] = useState(() => {
     // Check localStorage first
-    const saved = localStorage.getItem('darkMode');
-    if (saved !== null) {
-      return JSON.parse(saved);
-    }
-    // Check system preference
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const saved = localStorage.getItem('themeMode');
+    return saved || 'system'; // 'light', 'dark', or 'system'
   });
 
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  // Listen to system theme changes
   useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    
+    const handleChange = (e) => {
+      if (themeMode === 'system') {
+        setIsDarkMode(e.matches);
+      }
+    };
+
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, [themeMode]);
+
+  // Apply theme
+  useEffect(() => {
+    let shouldBeDark = false;
+
+    if (themeMode === 'dark') {
+      shouldBeDark = true;
+    } else if (themeMode === 'light') {
+      shouldBeDark = false;
+    } else {
+      // system
+      shouldBeDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+
+    setIsDarkMode(shouldBeDark);
+
     // Update localStorage
-    localStorage.setItem('darkMode', JSON.stringify(isDarkMode));
+    localStorage.setItem('themeMode', themeMode);
     
     // Update document class
-    if (isDarkMode) {
+    if (shouldBeDark) {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
     }
-  }, [isDarkMode]);
+  }, [themeMode]);
+
+  const setTheme = (mode) => {
+    setThemeMode(mode); // 'light', 'dark', or 'system'
+  };
 
   const toggleDarkMode = () => {
-    setIsDarkMode(prev => !prev);
+    // Toggle between light and dark (skip system for toggle)
+    setThemeMode(isDarkMode ? 'light' : 'dark');
   };
 
   return (
-    <ThemeContext.Provider value={{ isDarkMode, toggleDarkMode }}>
+    <ThemeContext.Provider value={{ 
+      isDarkMode, 
+      themeMode, 
+      setTheme, 
+      toggleDarkMode 
+    }}>
       {children}
     </ThemeContext.Provider>
   );
