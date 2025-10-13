@@ -96,6 +96,8 @@ model Property {
   leases     Lease[]
   units      Unit[]
   managers   PropertyManager[]
+  caretakers PropertyCaretaker[]
+  viewingAppointments ViewingAppointment[]
 }
 
 model Tenant {
