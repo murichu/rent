@@ -142,7 +142,6 @@ model Lease {
   inspections        Inspection[]
   agentLeases        AgentLease[]
   securityDeposit    SecurityDeposit?
-  cardTransactions   CardTransaction[]
 }
 
 enum UnitStatus {
