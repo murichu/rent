@@ -98,6 +98,7 @@ model Property {
   managers   PropertyManager[]
   caretakers PropertyCaretaker[]
   viewingAppointments ViewingAppointment[]
+  expenses   Expense[]
 }
 
 model Tenant {
@@ -140,6 +141,7 @@ model Lease {
   utilityBills       UtilityBill[]
   inspections        Inspection[]
   agentLeases        AgentLease[]
+  securityDeposit    SecurityDeposit?
 }
 
 enum UnitStatus {
@@ -595,6 +597,79 @@ model AgentLease {
   paid          Boolean   @default(false)
   paidAt        DateTime?
   createdAt     DateTime  @default(now())
+}
+
+// Expense Management
+model Expense {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  propertyId        String?   @db.ObjectId
+  property          Property? @relation(fields: [propertyId], references: [id])
+  agencyId          String    @db.ObjectId
+  agency            Agency    @relation(fields: [agencyId], references: [id])
+  category          String    // MAINTENANCE, UTILITIES, STAFF, REPAIRS, INSURANCE, TAXES, OTHER
+  amount            Int
+  description       String
+  expenseDate       DateTime
+  payee             String?
+  paymentMethod     String?
+  receiptUrl        String?
+  status            String    @default("PENDING_APPROVAL") // PENDING_APPROVAL, APPROVED, REJECTED, PAID
+  approvalRequired  Boolean   @default(false)
+  approvedBy        String?
+  approvedAt        DateTime?
+  approvalNotes     String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([agencyId])
+  @@index([propertyId])
+  @@index([category])
+  @@index([status])
+  @@index([expenseDate])
+}
+
+// Security Deposit Management
+model SecurityDeposit {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  leaseId           String    @unique @db.ObjectId
+  lease             Lease     @relation(fields: [leaseId], references: [id])
+  amount            Int
+  paidAt            DateTime
+  paymentMethod     String
+  paymentReference  String?
+  status            String    @default("HELD") // HELD, REFUNDED, FORFEITED
+  refundAmount      Int?
+  refundedAt        DateTime?
+  refunds           DepositRefund[]
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([leaseId])
+  @@index([status])
+}
+
+model DepositRefund {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  depositId         String    @db.ObjectId
+  deposit           SecurityDeposit @relation(fields: [depositId], references: [id])
+  totalDeductions   Int
+  deductions        String    // JSON array of deductions with reasons
+  refundAmount      Int
+  refundMethod      String    // MPESA, BANK, CASH
+  recipientPhone    String?
+  recipientAccount  String?
+  recipientBank     String?
+  status            String    @default("PENDING_APPROVAL") // PENDING_APPROVAL, APPROVED, REJECTED, PROCESSED, FAILED
+  approvedBy        String?
+  approvedAt        DateTime?
+  approvalNotes     String?
+  processedAt       DateTime?
+  transactionReference String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([depositId])
+  @@index([status])
 }
 
 // Manual tenant ratings removed; system is fully automated
