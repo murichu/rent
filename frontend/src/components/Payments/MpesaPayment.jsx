@@ -11,6 +11,8 @@ const MpesaPayment = ({ amount, leaseId, accountReference, onSuccess, onCancel }
   const [loading, setLoading] = useState(false);
   const [transactionStatus, setTransactionStatus] = useState(null);
   const [pollingInterval, setPollingInterval] = useState(null);
+  const [statusMessage, setStatusMessage] = useState('');
+  const [mpesaResponse, setMpesaResponse] = useState('');
 
   const formatPhoneNumber = (value) => {
     // Remove non-digits
@@ -31,36 +33,48 @@ const MpesaPayment = ({ amount, leaseId, accountReference, onSuccess, onCancel }
 
   const startPolling = (requestId) => {
     let attempts = 0;
-    const maxAttempts = 20; // Poll for 60 seconds (20 * 3s)
+    const maxAttempts = 30; // Poll for 90 seconds (30 * 3s)
 
     const interval = setInterval(async () => {
       attempts++;
 
       try {
-        const response = await api.mpesa.getStatus(requestId);
+        // Use detailed status endpoint to get user-friendly messages
+        const response = await api.mpesa.getDetailedStatus(requestId);
         const status = response.data.status;
+        const userMessage = response.data.userMessage;
+        const mpesaMsg = response.data.resultDescription || response.data.responseDescription;
+
+        // Update status messages for user
+        setStatusMessage(userMessage || 'Processing payment...');
+        setMpesaResponse(mpesaMsg || '');
 
         if (status === 'SUCCESS') {
           clearInterval(interval);
           setTransactionStatus('SUCCESS');
           setStep(3);
-          showToast.success('Payment received successfully! 🎉');
+          showToast.success(`Payment successful! ${userMessage}`);
           if (onSuccess) {
             onSuccess(response.data);
           }
         } else if (status === 'FAILED' || status === 'CANCELLED') {
           clearInterval(interval);
-          setTransactionStatus('FAILED');
+          setTransactionStatus(status);
           setStep(3);
-          showToast.error('Payment failed or was cancelled');
+          showToast.error(userMessage || 'Payment failed');
         } else if (attempts >= maxAttempts) {
           clearInterval(interval);
           setTransactionStatus('TIMEOUT');
           setStep(3);
-          showToast.warning('Payment verification timed out. Check status later.');
+          showToast.warning('Payment verification timed out. Check your M-Pesa messages.');
         }
       } catch (error) {
         console.error('Error checking payment status:', error);
+        if (attempts >= maxAttempts) {
+          clearInterval(interval);
+          setTransactionStatus('ERROR');
+          setStep(3);
+        }
       }
     }, 3000); // Poll every 3 seconds
 
@@ -198,9 +212,35 @@ const MpesaPayment = ({ amount, leaseId, accountReference, onSuccess, onCancel }
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
             Complete Payment on Your Phone
           </h2>
-          <p className="text-gray-600 dark:text-gray-400 mb-6">
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
             Check your phone for the M-Pesa prompt and enter your PIN
           </p>
+
+          {/* Real-time Status Message */}
+          {statusMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-4"
+            >
+              <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                📊 Status: {statusMessage}
+              </p>
+            </motion.div>
+          )}
+
+          {/* M-Pesa Response Message */}
+          {mpesaResponse && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg p-3 mb-4"
+            >
+              <p className="text-xs text-gray-600 dark:text-gray-400">
+                💬 M-Pesa: {mpesaResponse}
+              </p>
+            </motion.div>
+          )}
 
           {/* Loading Animation */}
           <div className="flex justify-center gap-2 mb-6">
@@ -265,13 +305,21 @@ const MpesaPayment = ({ amount, leaseId, accountReference, onSuccess, onCancel }
                 <span className="text-5xl">❌</span>
               </div>
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-                Payment {transactionStatus === 'TIMEOUT' ? 'Pending' : 'Failed'}
+                Payment {transactionStatus === 'TIMEOUT' ? 'Pending' : transactionStatus === 'CANCELLED' ? 'Cancelled' : 'Failed'}
               </h2>
-              <p className="text-gray-600 dark:text-gray-400 mb-6">
+              <p className="text-gray-600 dark:text-gray-400 mb-4">
                 {transactionStatus === 'TIMEOUT'
                   ? 'Payment verification timed out. Please check your M-Pesa messages.'
-                  : 'The payment was not completed. Please try again.'}
+                  : transactionStatus === 'CANCELLED'
+                  ? 'You cancelled the payment request.'
+                  : statusMessage || 'The payment was not completed. Please try again.'}
               </p>
+              {mpesaResponse && (
+                <div className="bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg p-3 mb-6 text-left">
+                  <p className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">M-Pesa Response:</p>
+                  <p className="text-sm text-gray-900 dark:text-white">{mpesaResponse}</p>
+                </div>
+              )}
             </>
           )}
 

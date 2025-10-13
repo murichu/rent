@@ -360,3 +360,458 @@ export async function linkTransactionToLease(checkoutRequestId, leaseId, agencyI
     data: { leaseId, agencyId },
   });
 }
+
+/**
+ * B2C (Business to Customer) - Send money to customer
+ * Used for refunds, payouts, etc.
+ * @param {string} phoneNumber - Recipient phone number
+ * @param {number} amount - Amount to send
+ * @param {string} remarks - Transaction remarks
+ * @param {string} occasion - Occasion for payment
+ */
+export async function initiateb2c(phoneNumber, amount, remarks = 'Refund', occasion = 'Refund') {
+  try {
+    const accessToken = await getMpesaAccessToken();
+    const formattedPhone = formatPhoneNumber(phoneNumber);
+
+    const requestData = {
+      InitiatorName: process.env.MPESA_INITIATOR_NAME,
+      SecurityCredential: process.env.MPESA_SECURITY_CREDENTIAL,
+      CommandID: 'BusinessPayment', // Or 'SalaryPayment', 'PromotionPayment'
+      Amount: Math.round(amount),
+      PartyA: MPESA_CONFIG.shortcode,
+      PartyB: formattedPhone,
+      Remarks: remarks,
+      QueueTimeOutURL: `${MPESA_CONFIG.callbackUrl}/b2c/timeout`,
+      ResultURL: `${MPESA_CONFIG.callbackUrl}/b2c/result`,
+      Occasion: occasion,
+    };
+
+    logger.info('Initiating B2C payment:', {
+      phone: formattedPhone,
+      amount,
+      remarks,
+    });
+
+    const response = await axios.post(
+      `${getBaseUrl()}/mpesa/b2c/v1/paymentrequest`,
+      requestData,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    // Store B2C transaction
+    await prisma.mpesab2cTransaction.create({
+      data: {
+        conversationId: response.data.ConversationID,
+        originatorConversationId: response.data.OriginatorConversationID,
+        phoneNumber: formattedPhone,
+        amount: amount,
+        remarks: remarks,
+        occasion: occasion,
+        status: 'PENDING',
+        responseCode: response.data.ResponseCode,
+        responseDescription: response.data.ResponseDescription,
+      },
+    });
+
+    logger.info('B2C payment initiated:', {
+      conversationId: response.data.ConversationID,
+    });
+
+    return {
+      success: true,
+      message: 'B2C payment initiated',
+      data: {
+        conversationId: response.data.ConversationID,
+        originatorConversationId: response.data.OriginatorConversationID,
+        responseCode: response.data.ResponseCode,
+        responseDescription: response.data.ResponseDescription,
+      },
+    };
+  } catch (error) {
+    logger.error('B2C payment failed:', error.response?.data || error.message);
+    throw new Error(error.response?.data?.errorMessage || 'Failed to initiate B2C payment');
+  }
+}
+
+/**
+ * Process B2C callback
+ */
+export async function processB2cCallback(callbackData) {
+  try {
+    const { Result } = callbackData;
+    const {
+      ConversationID,
+      OriginatorConversationID,
+      ResultCode,
+      ResultDesc,
+      ResultParameters,
+    } = Result;
+
+    logger.info('Processing B2C callback:', {
+      conversationId: ConversationID,
+      resultCode: ResultCode,
+    });
+
+    const transaction = await prisma.mpesab2cTransaction.findFirst({
+      where: { conversationId: ConversationID },
+    });
+
+    if (!transaction) {
+      logger.error('B2C transaction not found:', ConversationID);
+      return { success: false };
+    }
+
+    if (ResultCode === 0) {
+      // Success
+      const params = ResultParameters?.ResultParameter || [];
+      const receiptNumber = params.find((p) => p.Key === 'TransactionReceipt')?.Value;
+      const transactionAmount = params.find((p) => p.Key === 'TransactionAmount')?.Value;
+      const b2cChargesPaidAccountAvailableFunds = params.find((p) => p.Key === 'B2CChargesPaidAccountAvailableFunds')?.Value;
+      const receiverPartyPublicName = params.find((p) => p.Key === 'ReceiverPartyPublicName')?.Value;
+
+      await prisma.mpesab2cTransaction.update({
+        where: { id: transaction.id },
+        data: {
+          status: 'SUCCESS',
+          resultCode: ResultCode.toString(),
+          resultDescription: ResultDesc,
+          transactionId: receiptNumber,
+          transactionAmount: transactionAmount ? parseFloat(transactionAmount) : transaction.amount,
+          receiverName: receiverPartyPublicName,
+          completedAt: new Date(),
+        },
+      });
+
+      logger.info('B2C payment completed successfully:', { receiptNumber });
+    } else {
+      // Failed
+      await prisma.mpesab2cTransaction.update({
+        where: { id: transaction.id },
+        data: {
+          status: 'FAILED',
+          resultCode: ResultCode.toString(),
+          resultDescription: ResultDesc,
+          completedAt: new Date(),
+        },
+      });
+
+      logger.warn('B2C payment failed:', { resultCode: ResultCode, resultDesc: ResultDesc });
+    }
+
+    return { success: true };
+  } catch (error) {
+    logger.error('Error processing B2C callback:', error);
+    throw error;
+  }
+}
+
+/**
+ * Transaction Reversal
+ * Reverse a completed transaction
+ * @param {string} transactionId - Original M-Pesa transaction ID (receipt number)
+ * @param {number} amount - Amount to reverse
+ * @param {string} remarks - Reversal reason
+ */
+export async function reverseTransaction(transactionId, amount, remarks = 'Transaction Reversal') {
+  try {
+    const accessToken = await getMpesaAccessToken();
+
+    const requestData = {
+      Initiator: process.env.MPESA_INITIATOR_NAME,
+      SecurityCredential: process.env.MPESA_SECURITY_CREDENTIAL,
+      CommandID: 'TransactionReversal',
+      TransactionID: transactionId,
+      Amount: Math.round(amount),
+      ReceiverParty: MPESA_CONFIG.shortcode,
+      ReciverIdentifierType: '11', // Shortcode
+      ResultURL: `${MPESA_CONFIG.callbackUrl}/reversal/result`,
+      QueueTimeOutURL: `${MPESA_CONFIG.callbackUrl}/reversal/timeout`,
+      Remarks: remarks,
+      Occasion: remarks,
+    };
+
+    logger.info('Initiating transaction reversal:', {
+      transactionId,
+      amount,
+    });
+
+    const response = await axios.post(
+      `${getBaseUrl()}/mpesa/reversal/v1/request`,
+      requestData,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    // Store reversal request
+    await prisma.mpesaReversal.create({
+      data: {
+        originatorConversationId: response.data.OriginatorConversationID,
+        conversationId: response.data.ConversationID,
+        transactionId: transactionId,
+        amount: amount,
+        remarks: remarks,
+        status: 'PENDING',
+        responseCode: response.data.ResponseCode,
+        responseDescription: response.data.ResponseDescription,
+      },
+    });
+
+    logger.info('Reversal initiated:', {
+      conversationId: response.data.ConversationID,
+    });
+
+    return {
+      success: true,
+      message: 'Reversal request submitted',
+      data: {
+        conversationId: response.data.ConversationID,
+        originatorConversationId: response.data.OriginatorConversationID,
+      },
+    };
+  } catch (error) {
+    logger.error('Transaction reversal failed:', error.response?.data || error.message);
+    throw new Error(error.response?.data?.errorMessage || 'Failed to reverse transaction');
+  }
+}
+
+/**
+ * Process reversal callback
+ */
+export async function processReversalCallback(callbackData) {
+  try {
+    const { Result } = callbackData;
+    const { ConversationID, ResultCode, ResultDesc, ResultParameters } = Result;
+
+    logger.info('Processing reversal callback:', {
+      conversationId: ConversationID,
+      resultCode: ResultCode,
+    });
+
+    const reversal = await prisma.mpesaReversal.findFirst({
+      where: { conversationId: ConversationID },
+    });
+
+    if (!reversal) {
+      logger.error('Reversal not found:', ConversationID);
+      return { success: false };
+    }
+
+    if (ResultCode === 0) {
+      // Success
+      const params = ResultParameters?.ResultParameter || [];
+      const debitAccountBalance = params.find((p) => p.Key === 'DebitAccountBalance')?.Value;
+
+      await prisma.mpesaReversal.update({
+        where: { id: reversal.id },
+        data: {
+          status: 'SUCCESS',
+          resultCode: ResultCode.toString(),
+          resultDescription: ResultDesc,
+          debitAccountBalance: debitAccountBalance,
+          completedAt: new Date(),
+        },
+      });
+
+      logger.info('Transaction reversed successfully');
+    } else {
+      await prisma.mpesaReversal.update({
+        where: { id: reversal.id },
+        data: {
+          status: 'FAILED',
+          resultCode: ResultCode.toString(),
+          resultDescription: ResultDesc,
+          completedAt: new Date(),
+        },
+      });
+
+      logger.warn('Transaction reversal failed:', { resultCode: ResultCode });
+    }
+
+    return { success: true };
+  } catch (error) {
+    logger.error('Error processing reversal callback:', error);
+    throw error;
+  }
+}
+
+/**
+ * Check Account Balance
+ */
+export async function checkAccountBalance() {
+  try {
+    const accessToken = await getMpesaAccessToken();
+
+    const requestData = {
+      Initiator: process.env.MPESA_INITIATOR_NAME,
+      SecurityCredential: process.env.MPESA_SECURITY_CREDENTIAL,
+      CommandID: 'AccountBalance',
+      PartyA: MPESA_CONFIG.shortcode,
+      IdentifierType: '4', // Organization shortcode
+      Remarks: 'Account Balance Query',
+      QueueTimeOutURL: `${MPESA_CONFIG.callbackUrl}/balance/timeout`,
+      ResultURL: `${MPESA_CONFIG.callbackUrl}/balance/result`,
+    };
+
+    logger.info('Checking M-Pesa account balance');
+
+    const response = await axios.post(
+      `${getBaseUrl()}/mpesa/accountbalance/v1/query`,
+      requestData,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    // Store balance check request
+    await prisma.mpesaBalanceCheck.create({
+      data: {
+        conversationId: response.data.ConversationID,
+        originatorConversationId: response.data.OriginatorConversationID,
+        status: 'PENDING',
+        responseCode: response.data.ResponseCode,
+        responseDescription: response.data.ResponseDescription,
+      },
+    });
+
+    logger.info('Balance check initiated:', {
+      conversationId: response.data.ConversationID,
+    });
+
+    return {
+      success: true,
+      message: 'Balance check initiated',
+      data: {
+        conversationId: response.data.ConversationID,
+      },
+    };
+  } catch (error) {
+    logger.error('Balance check failed:', error.response?.data || error.message);
+    throw new Error(error.response?.data?.errorMessage || 'Failed to check account balance');
+  }
+}
+
+/**
+ * Process balance callback
+ */
+export async function processBalanceCallback(callbackData) {
+  try {
+    const { Result } = callbackData;
+    const { ConversationID, ResultCode, ResultDesc, ResultParameters } = Result;
+
+    logger.info('Processing balance callback:', {
+      conversationId: ConversationID,
+      resultCode: ResultCode,
+    });
+
+    const balanceCheck = await prisma.mpesaBalanceCheck.findFirst({
+      where: { conversationId: ConversationID },
+    });
+
+    if (!balanceCheck) {
+      logger.error('Balance check not found:', ConversationID);
+      return { success: false };
+    }
+
+    if (ResultCode === 0) {
+      // Success
+      const params = ResultParameters?.ResultParameter || [];
+      const accountBalance = params.find((p) => p.Key === 'AccountBalance')?.Value;
+      const availableBalance = params.find((p) => p.Key === 'AvailableFunds')?.Value;
+
+      await prisma.mpesaBalanceCheck.update({
+        where: { id: balanceCheck.id },
+        data: {
+          status: 'SUCCESS',
+          resultCode: ResultCode.toString(),
+          resultDescription: ResultDesc,
+          accountBalance: accountBalance,
+          availableBalance: parseFloat(availableBalance) || 0,
+          completedAt: new Date(),
+        },
+      });
+
+      logger.info('Account balance retrieved:', { availableBalance });
+    } else {
+      await prisma.mpesaBalanceCheck.update({
+        where: { id: balanceCheck.id },
+        data: {
+          status: 'FAILED',
+          resultCode: ResultCode.toString(),
+          resultDescription: ResultDesc,
+          completedAt: new Date(),
+        },
+      });
+    }
+
+    return { success: true };
+  } catch (error) {
+    logger.error('Error processing balance callback:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get latest account balance from database
+ */
+export async function getLatestAccountBalance() {
+  const latestBalance = await prisma.mpesaBalanceCheck.findFirst({
+    where: { status: 'SUCCESS' },
+    orderBy: { completedAt: 'desc' },
+  });
+
+  return latestBalance;
+}
+
+/**
+ * Get detailed transaction status with M-Pesa messages
+ */
+export async function getDetailedTransactionStatus(checkoutRequestId) {
+  const transaction = await prisma.mpesaTransaction.findFirst({
+    where: { checkoutRequestId },
+    include: {
+      lease: {
+        include: {
+          tenant: true,
+          property: true,
+        },
+      },
+    },
+  });
+
+  if (!transaction) {
+    return null;
+  }
+
+  // Map result codes to user-friendly messages
+  const statusMessages = {
+    '0': 'Payment completed successfully',
+    '1': 'Insufficient funds in M-Pesa account',
+    '1032': 'Payment cancelled by user',
+    '1037': 'Payment request timed out',
+    '2001': 'Invalid payment request',
+    '1': 'Balance insufficient',
+    '1001': 'Invalid phone number',
+    '1019': 'Transaction expired',
+  };
+
+  const userMessage = statusMessages[transaction.resultCode] || transaction.resultDescription || 'Processing payment...';
+
+  return {
+    ...transaction,
+    userMessage,
+    statusIcon: transaction.status === 'SUCCESS' ? '✅' : transaction.status === 'FAILED' ? '❌' : '⏳',
+  };
+}

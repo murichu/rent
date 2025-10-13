@@ -1,48 +1,102 @@
-# 💳 M-Pesa Daraja API Integration Guide
+# 💳 M-Pesa Daraja API - Complete Integration Guide
 
 ## Overview
-Complete Safaricom M-Pesa integration for STK Push (Lipa Na M-Pesa Online) payments in Haven Property Management System.
+**COMPLETE** Safaricom M-Pesa Daraja API integration for Haven Property Management System including:
+- ✅ **C2B STK Push** (Customer payments)
+- ✅ **B2C** (Refunds & Payouts)
+- ✅ **Transaction Reversal**
+- ✅ **Account Balance**
+- ✅ **Real-time status polling with user messages**
 
 ---
 
 ## ✅ What's Been Implemented
 
-### **Backend (API)**
-✅ M-Pesa service (`api/src/services/mpesa.js`)
+### **Backend (API) - COMPLETE DARAJA INTEGRATION**
+
+✅ **M-Pesa service** (`api/src/services/mpesa.js`)
   - OAuth authentication
-  - STK Push initiation
-  - Transaction status queries
-  - Callback processing
+  - **C2B STK Push** initiation
+  - **B2C payments** (refunds, payouts, salaries)
+  - **Transaction reversals**
+  - **Account balance checks**
+  - Transaction status queries with user-friendly messages
+  - Callback processing for all transaction types
   - Phone number formatting
   - Password generation
   - Transaction storage
 
-✅ M-Pesa routes (`api/src/routes/mpesa.js`)
-  - POST /api/v1/mpesa/stk-push - Initiate payment
-  - GET /api/v1/mpesa/status/:id - Check status
-  - POST /api/v1/mpesa/callback - Receive callbacks
-  - GET /api/v1/mpesa/transactions - List transactions
-  - GET /api/v1/mpesa/transactions/:id - Get transaction
+✅ **M-Pesa routes** (`api/src/routes/mpesa.js`)
+  - **C2B STK Push:**
+    - POST /api/v1/mpesa/stk-push - Initiate payment
+    - GET /api/v1/mpesa/status/:id - Check status
+    - GET /api/v1/mpesa/status-detailed/:id - Get detailed status with messages
+    - POST /api/v1/mpesa/callback - Receive callbacks
+  
+  - **B2C (Refunds/Payouts):**
+    - POST /api/v1/mpesa/b2c - Send money to customer
+    - POST /api/v1/mpesa/b2c/result - Result callback
+    - POST /api/v1/mpesa/b2c/timeout - Timeout callback
+  
+  - **Reversal:**
+    - POST /api/v1/mpesa/reverse - Reverse transaction
+    - POST /api/v1/mpesa/reversal/result - Reversal callback
+    - POST /api/v1/mpesa/reversal/timeout - Timeout callback
+  
+  - **Balance:**
+    - POST /api/v1/mpesa/balance - Check account balance
+    - GET /api/v1/mpesa/balance/latest - Get latest balance
+    - POST /api/v1/mpesa/balance/result - Balance callback
+    - POST /api/v1/mpesa/balance/timeout - Timeout callback
+  
+  - **Transactions:**
+    - GET /api/v1/mpesa/transactions - List all transactions
+    - GET /api/v1/mpesa/transactions/:id - Get specific transaction
 
-✅ Database schema (`MpesaTransaction` model)
-  - Stores all M-Pesa transactions
-  - Links to leases and agencies
-  - Tracks status (PENDING, SUCCESS, FAILED)
-  - Stores M-Pesa receipt numbers
+✅ **Database schemas** (4 new models)
+  - `MpesaTransaction` - C2B STK Push transactions
+  - `MpesaB2CTransaction` - B2C payouts/refunds
+  - `MpesaReversal` - Transaction reversals
+  - `MpesaBalanceCheck` - Account balance history
 
-✅ Security
-  - Helmet middleware added
+✅ **Security**
+  - Helmet middleware (secure HTTP headers)
   - Content Security Policy configured
   - Rate limiting applied
-  - Audit logging for all transactions
+  - Audit logging for all operations
+  - JWT authentication required
 
-### **Frontend**
-✅ MpesaPayment component
+### **Frontend - COMPLETE UI**
+
+✅ **MpesaPayment** component (Enhanced)
   - 3-step payment flow
-  - Phone number input with formatting
-  - Payment status polling
-  - Success/failure handling
-  - Real-time status updates
+  - Phone number input with auto-formatting
+  - Real-time status polling (every 3s for 90s)
+  - **Live status messages** from M-Pesa
+  - **M-Pesa response messages** displayed to user
+  - Success/failure/cancelled/timeout handling
+  - Beautiful animations
+
+✅ **B2CPayment** component
+  - Send money to customers
+  - Refunds, payouts, salaries, bonuses
+  - Phone number formatting
+  - Amount and remarks input
+  - Occasion selection
+
+✅ **TransactionReversal** component
+  - Reverse completed transactions
+  - Confirmation required
+  - Transaction details display
+  - Reason/remarks input
+  - Warning messages
+
+✅ **AccountBalance** component
+  - Display M-Pesa account balance
+  - Refresh balance button
+  - Auto-polling for balance updates
+  - Last checked timestamp
+  - Beautiful card design
 
 ---
 

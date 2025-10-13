@@ -7,6 +7,14 @@ import {
   getMpesaTransaction,
   getMpesaTransactionsByLease,
   linkTransactionToLease,
+  initiateb2c,
+  processB2cCallback,
+  reverseTransaction,
+  processReversalCallback,
+  checkAccountBalance,
+  processBalanceCallback,
+  getLatestAccountBalance,
+  getDetailedTransactionStatus,
 } from '../services/mpesa.js';
 import { successResponse, errorResponse } from '../utils/responses.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
@@ -194,6 +202,186 @@ mpesaRouter.get(
     }
 
     return successResponse(res, transaction);
+  })
+);
+
+/**
+ * POST /mpesa/b2c
+ * Initiate B2C payment (Business to Customer - refunds, payouts)
+ */
+mpesaRouter.post(
+  '/b2c',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { phoneNumber, amount, remarks, occasion } = req.body;
+
+    if (!phoneNumber || !amount) {
+      return errorResponse(res, 'Phone number and amount required', 400);
+    }
+
+    try {
+      const result = await initiateb2c(phoneNumber, amount, remarks, occasion);
+
+      auditLog('MPESA_B2C_INITIATED', req.user.userId, {
+        phoneNumber,
+        amount,
+        remarks,
+      });
+
+      return successResponse(res, result.data, 200, {
+        message: result.message,
+      });
+    } catch (error) {
+      return errorResponse(res, error.message, 400);
+    }
+  })
+);
+
+/**
+ * POST /mpesa/b2c/result
+ * B2C result callback
+ */
+mpesaRouter.post('/b2c/result', asyncHandler(async (req, res) => {
+  logger.info('B2C result callback received');
+  await processB2cCallback(req.body);
+  return res.status(200).json({ ResultCode: 0, ResultDesc: 'Success' });
+}));
+
+/**
+ * POST /mpesa/b2c/timeout
+ * B2C timeout callback
+ */
+mpesaRouter.post('/b2c/timeout', asyncHandler(async (req, res) => {
+  logger.warn('B2C timeout callback received');
+  return res.status(200).json({ ResultCode: 0, ResultDesc: 'Success' });
+}));
+
+/**
+ * POST /mpesa/reverse
+ * Reverse a transaction
+ */
+mpesaRouter.post(
+  '/reverse',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { transactionId, amount, remarks } = req.body;
+
+    if (!transactionId || !amount) {
+      return errorResponse(res, 'Transaction ID and amount required', 400);
+    }
+
+    try {
+      const result = await reverseTransaction(transactionId, amount, remarks);
+
+      auditLog('MPESA_REVERSAL_INITIATED', req.user.userId, {
+        transactionId,
+        amount,
+      });
+
+      return successResponse(res, result.data, 200, {
+        message: result.message,
+      });
+    } catch (error) {
+      return errorResponse(res, error.message, 400);
+    }
+  })
+);
+
+/**
+ * POST /mpesa/reversal/result
+ * Reversal result callback
+ */
+mpesaRouter.post('/reversal/result', asyncHandler(async (req, res) => {
+  logger.info('Reversal result callback received');
+  await processReversalCallback(req.body);
+  return res.status(200).json({ ResultCode: 0, ResultDesc: 'Success' });
+}));
+
+/**
+ * POST /mpesa/reversal/timeout
+ * Reversal timeout callback
+ */
+mpesaRouter.post('/reversal/timeout', asyncHandler(async (req, res) => {
+  logger.warn('Reversal timeout callback received');
+  return res.status(200).json({ ResultCode: 0, ResultDesc: 'Success' });
+}));
+
+/**
+ * POST /mpesa/balance
+ * Check account balance
+ */
+mpesaRouter.post(
+  '/balance',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    try {
+      const result = await checkAccountBalance();
+
+      auditLog('MPESA_BALANCE_CHECK', req.user.userId);
+
+      return successResponse(res, result.data, 200, {
+        message: result.message,
+      });
+    } catch (error) {
+      return errorResponse(res, error.message, 400);
+    }
+  })
+);
+
+/**
+ * GET /mpesa/balance/latest
+ * Get latest balance from database
+ */
+mpesaRouter.get(
+  '/balance/latest',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const balance = await getLatestAccountBalance();
+
+    if (!balance) {
+      return errorResponse(res, 'No balance data available. Check balance first.', 404);
+    }
+
+    return successResponse(res, balance);
+  })
+);
+
+/**
+ * POST /mpesa/balance/result
+ * Balance result callback
+ */
+mpesaRouter.post('/balance/result', asyncHandler(async (req, res) => {
+  logger.info('Balance result callback received');
+  await processBalanceCallback(req.body);
+  return res.status(200).json({ ResultCode: 0, ResultDesc: 'Success' });
+}));
+
+/**
+ * POST /mpesa/balance/timeout
+ * Balance timeout callback
+ */
+mpesaRouter.post('/balance/timeout', asyncHandler(async (req, res) => {
+  logger.warn('Balance timeout callback received');
+  return res.status(200).json({ ResultCode: 0, ResultDesc: 'Success' });
+}));
+
+/**
+ * GET /mpesa/status-detailed/:checkoutRequestId
+ * Get detailed status with user-friendly messages
+ */
+mpesaRouter.get(
+  '/status-detailed/:checkoutRequestId',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { checkoutRequestId } = req.params;
+
+    const status = await getDetailedTransactionStatus(checkoutRequestId);
+
+    if (!status) {
+      return errorResponse(res, 'Transaction not found', 404);
+    }
+
+    return successResponse(res, status);
   })
 );
 

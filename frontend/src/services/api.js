@@ -196,10 +196,22 @@ const api = {
 
   // M-Pesa Payments
   mpesa: {
+    // C2B STK Push
     initiateStkPush: (data) => apiClient.post('/mpesa/stk-push', data),
     getStatus: (checkoutRequestId) => apiClient.get(`/mpesa/status/${checkoutRequestId}`),
+    getDetailedStatus: (checkoutRequestId) => apiClient.get(`/mpesa/status-detailed/${checkoutRequestId}`),
     getTransactions: (params) => apiClient.get('/mpesa/transactions', { params }),
     getTransaction: (id) => apiClient.get(`/mpesa/transactions/${id}`),
+    
+    // B2C (Business to Customer - Refunds/Payouts)
+    initiateB2C: (data) => apiClient.post('/mpesa/b2c', data),
+    
+    // Transaction Reversal
+    reverseTransaction: (data) => apiClient.post('/mpesa/reverse', data),
+    
+    // Account Balance
+    checkBalance: () => apiClient.post('/mpesa/balance'),
+    getLatestBalance: () => apiClient.get('/mpesa/balance/latest'),
   },
 };
 

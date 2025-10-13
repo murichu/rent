@@ -30,6 +30,8 @@ model Agency {
   vacateNotices VacateNotice[]
   penalties  Penalty[]
   mpesaTransactions MpesaTransaction[]
+  mpesaB2CTransactions MpesaB2CTransaction[]
+  mpesaReversals MpesaReversal[]
 }
 
 model User {
@@ -300,7 +302,7 @@ model TwoFactorSecret {
   updatedAt   DateTime @updatedAt
 }
 
-// M-Pesa Daraja API Transactions
+// M-Pesa Daraja API Transactions (C2B STK Push)
 model MpesaTransaction {
   id                   String    @id @default(auto()) @map("_id") @db.ObjectId
   merchantRequestId    String
@@ -328,6 +330,78 @@ model MpesaTransaction {
   @@index([phoneNumber])
   @@index([status])
   @@index([leaseId])
+}
+
+// M-Pesa B2C Transactions (Business to Customer - Refunds/Payouts)
+model MpesaB2CTransaction {
+  id                        String    @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId            String    @unique
+  originatorConversationId  String
+  phoneNumber               String
+  amount                    Int
+  remarks                   String
+  occasion                  String?
+  status                    String    @default("PENDING") // PENDING, SUCCESS, FAILED
+  responseCode              String?
+  responseDescription       String?
+  transactionId             String?   // M-Pesa transaction receipt
+  transactionAmount         Float?
+  receiverName              String?
+  resultCode                String?
+  resultDescription         String?
+  agencyId                  String?   @db.ObjectId
+  agency                    Agency?   @relation(fields: [agencyId], references: [id])
+  createdAt                 DateTime  @default(now())
+  completedAt               DateTime?
+  updatedAt                 DateTime  @updatedAt
+
+  @@index([conversationId])
+  @@index([phoneNumber])
+  @@index([status])
+}
+
+// M-Pesa Transaction Reversals
+model MpesaReversal {
+  id                        String    @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId            String    @unique
+  originatorConversationId  String
+  transactionId             String    // Original transaction ID to reverse
+  amount                    Int
+  remarks                   String
+  status                    String    @default("PENDING") // PENDING, SUCCESS, FAILED
+  responseCode              String?
+  responseDescription       String?
+  resultCode                String?
+  resultDescription         String?
+  debitAccountBalance       String?
+  agencyId                  String?   @db.ObjectId
+  agency                    Agency?   @relation(fields: [agencyId], references: [id])
+  createdAt                 DateTime  @default(now())
+  completedAt               DateTime?
+  updatedAt                 DateTime  @updatedAt
+
+  @@index([conversationId])
+  @@index([transactionId])
+}
+
+// M-Pesa Account Balance Checks
+model MpesaBalanceCheck {
+  id                        String    @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId            String    @unique
+  originatorConversationId  String
+  status                    String    @default("PENDING") // PENDING, SUCCESS, FAILED
+  responseCode              String?
+  responseDescription       String?
+  accountBalance            String?   // Full balance string from M-Pesa
+  availableBalance          Float?    // Parsed available balance
+  resultCode                String?
+  resultDescription         String?
+  createdAt                 DateTime  @default(now())
+  completedAt               DateTime?
+  updatedAt                 DateTime  @updatedAt
+
+  @@index([conversationId])
+  @@index([completedAt])
 }
 
 // Manual tenant ratings removed; system is fully automated
