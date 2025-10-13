@@ -99,6 +99,8 @@ model Property {
   caretakers PropertyCaretaker[]
   viewingAppointments ViewingAppointment[]
   expenses   Expense[]
+  systemFeeConfig SystemFeeConfig?
+  settings   PropertySettings?
 }
 
 model Tenant {
@@ -584,6 +586,7 @@ model Agent {
   totalEarned     Float     @default(0)
   rating          Float     @default(0)
   leases          AgentLease[]
+  settings        AgentSettings?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 }
@@ -607,7 +610,7 @@ model Expense {
   property          Property? @relation(fields: [propertyId], references: [id])
   agencyId          String    @db.ObjectId
   agency            Agency    @relation(fields: [agencyId], references: [id])
-  category          String    // MAINTENANCE, UTILITIES, STAFF, REPAIRS, INSURANCE, TAXES, OTHER
+  category          String    // MAINTENANCE, UTILITIES, STAFF, REPAIRS, INSURANCE, TAXES, SYSTEM_FEE, OTHER
   amount            Int
   description       String
   expenseDate       DateTime
@@ -627,6 +630,51 @@ model Expense {
   @@index([category])
   @@index([status])
   @@index([expenseDate])
+}
+
+// System Fee Configuration (Per Property)
+model SystemFeeConfig {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  propertyId  String    @unique @db.ObjectId
+  property    Property  @relation(fields: [propertyId], references: [id])
+  enabled     Boolean   @default(false)
+  feeType     String    @default("MONTHLY") // MONTHLY, YEARLY
+  monthlyFee  Int       @default(500)
+  yearlyFee   Int       @default(5000)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([propertyId])
+  @@index([enabled])
+}
+
+// Property Settings (Manual Payment Toggle, etc.)
+model PropertySettings {
+  id                    String    @id @default(auto()) @map("_id") @db.ObjectId
+  propertyId            String    @unique @db.ObjectId
+  property              Property  @relation(fields: [propertyId], references: [id])
+  allowManualPayment    Boolean   @default(true)
+  requireApprovalForManual Boolean @default(false)
+  autoGenerateInvoices  Boolean   @default(true)
+  sendPaymentReminders  Boolean   @default(true)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([propertyId])
+}
+
+// Agent Settings
+model AgentSettings {
+  id                    String    @id @default(auto()) @map("_id") @db.ObjectId
+  agentId               String    @unique @db.ObjectId
+  agent                 Agent     @relation(fields: [agentId], references: [id])
+  canAddCaretakers      Boolean   @default(true)
+  canRecordManualPayments Boolean @default(true)
+  requireApproval       Boolean   @default(true)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([agentId])
 }
 
 // Security Deposit Management

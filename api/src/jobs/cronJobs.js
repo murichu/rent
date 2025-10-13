@@ -247,6 +247,8 @@ export function scheduleLateFeeCalculation() {
   logger.info('✅ Late fee calculation job scheduled (daily at 1:00 AM)');
 }
 
+import { scheduleSystemFees } from '../services/systemFees.js';
+
 /**
  * Initialize all cron jobs
  */
@@ -257,6 +259,7 @@ export function initializeCronJobs() {
   schedulePaymentReminders();
   scheduleLeaseExpirationAlerts();
   scheduleLateFeeCalculation();
+  scheduleSystemFees();
   
   logger.info('✅ All cron jobs initialized successfully');
 }
