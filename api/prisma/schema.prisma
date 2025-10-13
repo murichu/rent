@@ -142,6 +142,7 @@ model Lease {
   inspections        Inspection[]
   agentLeases        AgentLease[]
   securityDeposit    SecurityDeposit?
+  cardTransactions   CardTransaction[]
 }
 
 enum UnitStatus {
@@ -670,6 +671,34 @@ model DepositRefund {
 
   @@index([depositId])
   @@index([status])
+}
+
+// Card Payment Transactions (Stripe + Paystack)
+model CardTransaction {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  transactionId   String    @unique // Stripe/Paystack transaction ID
+  reference       String?   // Paystack reference
+  provider        String    // STRIPE, PAYSTACK
+  amount          Float
+  currency        String    @default("KES")
+  channel         String?   // card, bank, ussd, mobile_money (Paystack)
+  customerEmail   String
+  status          String    @default("PENDING") // PENDING, SUCCESS, FAILED
+  errorMessage    String?
+  metadata        String?   // JSON metadata
+  leaseId         String?   @db.ObjectId
+  lease           Lease?    @relation(fields: [leaseId], references: [id])
+  agencyId        String?   @db.ObjectId
+  agency          Agency?   @relation(fields: [agencyId], references: [id])
+  createdAt       DateTime  @default(now())
+  completedAt     DateTime?
+  updatedAt       DateTime  @updatedAt
+
+  @@index([transactionId])
+  @@index([reference])
+  @@index([provider])
+  @@index([status])
+  @@index([leaseId])
 }
 
 // Manual tenant ratings removed; system is fully automated

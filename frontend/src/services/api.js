@@ -239,6 +239,21 @@ const api = {
     // Bank Codes
     getBankCodes: () => apiClient.get('/kcb/bank-codes'),
   },
+
+  // Card Payments (Stripe + Paystack)
+  cards: {
+    // Stripe
+    createStripeIntent: (data) => apiClient.post('/cards/stripe/create-intent', data),
+    getStripeStatus: (paymentIntentId) => apiClient.get(`/cards/stripe/status/${paymentIntentId}`),
+    
+    // Paystack
+    initializePaystack: (data) => apiClient.post('/cards/paystack/initialize', data),
+    verifyPaystack: (reference) => apiClient.get(`/cards/paystack/verify/${reference}`),
+    
+    // General
+    getTransactions: (params) => apiClient.get('/cards/transactions', { params }),
+    getTransaction: (id) => apiClient.get(`/cards/transactions/${id}`),
+  },
 };
 
 export default api;
