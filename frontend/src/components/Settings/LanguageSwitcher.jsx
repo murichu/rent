@@ -8,6 +8,7 @@ const LanguageSwitcher = ({ position = 'bottom' }) => {
 
   const languages = [
     { code: 'en', name: 'English', flag: '🇺🇸', nativeName: 'English' },
+    { code: 'sw', name: 'Kiswahili', flag: '🇰🇪', nativeName: 'Kiswahili' },
     { code: 'es', name: 'Español', flag: '🇪🇸', nativeName: 'Español' },
     { code: 'fr', name: 'Français', flag: '🇫🇷', nativeName: 'Français' },
     { code: 'pt', name: 'Português', flag: '🇵🇹', nativeName: 'Português' },

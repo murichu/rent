@@ -3,6 +3,90 @@ import { initReactI18next } from 'react-i18next';
 
 // Translation resources
 const resources = {
+  // Swahili (Kiswahili) - For Kenya Market
+  sw: {
+    translation: {
+      // Navigation
+      nav: {
+        dashboard: 'Dashibodi',
+        properties: 'Mali',
+        tenants: 'Wapangaji',
+        leases: 'Mikataba',
+        payments: 'Malipo',
+        maintenance: 'Matengenezo',
+        settings: 'Mipangilio',
+        logout: 'Toka',
+      },
+      // Common
+      common: {
+        save: 'Hifadhi',
+        cancel: 'Ghairi',
+        delete: 'Futa',
+        edit: 'Hariri',
+        add: 'Ongeza',
+        search: 'Tafuta',
+        filter: 'Chuja',
+        export: 'Hamisha',
+        import: 'Ingiza',
+        loading: 'Inapakia...',
+        noData: 'Hakuna data',
+        confirm: 'Thibitisha',
+        yes: 'Ndio',
+        no: 'Hapana',
+        rent: 'Kodi',
+        deposit: 'Amana',
+        tenant: 'Mpangaji',
+        landlord: 'Mwenye Nyumba',
+        property: 'Mali',
+        amount: 'Kiasi',
+        date: 'Tarehe',
+        status: 'Hali',
+      },
+      // Dashboard
+      dashboard: {
+        welcome: 'Karibu tena!',
+        overview: 'Hivi ndivyo mambo yalivyo leo',
+        totalRevenue: 'Mapato Yote',
+        occupancyRate: 'Kiwango cha Wapangaji',
+        pendingPayments: 'Malipo Yanayosubiri',
+        activeLeases: 'Mikataba Hai',
+      },
+      // Properties
+      properties: {
+        title: 'Mali',
+        addNew: 'Ongeza Mali',
+        viewAll: 'Angalia Mali Zote',
+        status: {
+          available: 'Inapatikana',
+          occupied: 'Imeshughulikiwa',
+          maintenance: 'Matengenezo',
+          offMarket: 'Haipo Sokoni',
+        },
+        types: {
+          bedsitter: 'Bedsitter',
+          singleRoom: 'Chumba Moja',
+          doubleRoom: 'Chumba Mbili',
+          oneBedroom: 'Sebule 1',
+          twoBedroom: 'Sebule 2',
+          threeBedroom: 'Sebule 3',
+          maisonette: 'Maisonette',
+          bungalow: 'Bungalow',
+        },
+      },
+      // Payments
+      payments: {
+        title: 'Malipo',
+        payRent: 'Lipa Kodi',
+        recordPayment: 'Rekodi Malipo',
+        mpesa: 'M-Pesa',
+        bank: 'Benki',
+        cash: 'Taslimu',
+        pending: 'Inasubiri',
+        completed: 'Imekamilika',
+        failed: 'Imeshindwa',
+      },
+    },
+  },
   en: {
     translation: {
       // Navigation

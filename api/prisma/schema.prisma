@@ -61,12 +61,19 @@ enum Role {
 enum PropertyType {
   SINGLE_ROOM
   DOUBLE_ROOM
-  BEDSEATER
+  BEDSITTER
   ONE_BEDROOM
   TWO_BEDROOM
   THREE_BEDROOM
+  FOUR_BEDROOM
   MAISONETTE
   BUNGALOW
+  SERVANT_QUARTER
+  PENTHOUSE
+  TOWNHOUSE
+  VILLA
+  COMMERCIAL
+  OFFICE
 }
 
 model Property {
@@ -128,6 +135,9 @@ model Lease {
   penalties          Penalty[]
   mpesaTransactions  MpesaTransaction[]
   kcbTransactions    KcbTransaction[]
+  utilityBills       UtilityBill[]
+  inspections        Inspection[]
+  agentLeases        AgentLease[]
 }
 
 enum UnitStatus {
@@ -456,6 +466,133 @@ model KcbStatementRequest {
 
   @@index([accountNumber])
   @@index([createdAt])
+}
+
+// Utility Bills (Water & Electricity) - Kenya Specific
+model UtilityBill {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  leaseId           String    @db.ObjectId
+  lease             Lease     @relation(fields: [leaseId], references: [id])
+  type              String    // WATER, ELECTRICITY
+  meterNumber       String?
+  previousReading   Float
+  currentReading    Float
+  units             Float     // kWh or m³
+  ratePerUnit       Float
+  amount            Int
+  month             Int       // 1-12
+  year              Int
+  status            String    @default("PENDING") // PENDING, PAID
+  dueDate           DateTime
+  paidAt            DateTime?
+  paymentMethod     String?   // MPESA, BANK, CASH
+  paymentReference  String?
+  meterPhotoUrl     String?   // Photo of meter reading
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([leaseId])
+  @@index([type])
+  @@index([status])
+  @@index([year, month])
+}
+
+// Caretakers (Property Managers/Watchmen) - Kenya Specific
+model Caretaker {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  name          String
+  phone         String
+  email         String?
+  idNumber      String?
+  agencyId      String    @db.ObjectId
+  agency        Agency    @relation(fields: [agencyId], references: [id])
+  properties    PropertyCaretaker[]
+  commissionRate Float    @default(0) // Percentage or flat amount
+  rating        Float     @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model PropertyCaretaker {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  propertyId  String    @db.ObjectId
+  property    Property  @relation(fields: [propertyId], references: [id])
+  caretakerId String    @db.ObjectId
+  caretaker   Caretaker @relation(fields: [caretakerId], references: [id])
+  assignedAt  DateTime  @default(now())
+}
+
+// Viewing Appointments
+model ViewingAppointment {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  propertyId  String    @db.ObjectId
+  property    Property  @relation(fields: [propertyId], references: [id])
+  contactName String
+  contactPhone String
+  contactEmail String?
+  scheduledAt DateTime
+  status      String    @default("SCHEDULED") // SCHEDULED, COMPLETED, CANCELLED, NO_SHOW
+  notes       String?
+  feedback    String?
+  agencyId    String    @db.ObjectId
+  agency      Agency    @relation(fields: [agencyId], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([propertyId])
+  @@index([scheduledAt])
+  @@index([status])
+}
+
+// Move-In/Move-Out Inspections
+model Inspection {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  leaseId       String    @db.ObjectId
+  lease         Lease     @relation(fields: [leaseId], references: [id])
+  type          String    // MOVE_IN, MOVE_OUT
+  inspectionDate DateTime
+  inspector     String    // Name of inspector
+  checklist     Json      // Inspection checklist with ratings
+  photos        String[]  @default([]) // Photo URLs
+  damages       Json?     // Damage assessment with costs
+  totalDamageCost Int     @default(0)
+  notes         String?
+  tenantSignature String? // Digital signature or confirmation
+  agencyId      String    @db.ObjectId
+  agency        Agency    @relation(fields: [agencyId], references: [id])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([leaseId])
+  @@index([type])
+}
+
+// Agent Commission Tracking
+model Agent {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  name            String
+  phone           String
+  email           String?
+  agencyId        String    @db.ObjectId
+  agency          Agency    @relation(fields: [agencyId], references: [id])
+  commissionRate  Float     @default(100) // Percentage (100 = one month rent)
+  totalEarned     Float     @default(0)
+  rating          Float     @default(0)
+  leases          AgentLease[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model AgentLease {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  agentId       String    @db.ObjectId
+  agent         Agent     @relation(fields: [agentId], references: [id])
+  leaseId       String    @db.ObjectId
+  lease         Lease     @relation(fields: [leaseId], references: [id])
+  commission    Float     // Commission amount
+  paid          Boolean   @default(false)
+  paidAt        DateTime?
+  createdAt     DateTime  @default(now())
 }
 
 // Manual tenant ratings removed; system is fully automated
