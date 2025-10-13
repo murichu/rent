@@ -46,6 +46,7 @@ model User {
   refreshTokens RefreshToken[]
   verificationTokens VerificationToken[]
   passwordResetTokens PasswordResetToken[]
+  twoFactorSecret TwoFactorSecret?
 }
 
 enum Role {
@@ -284,6 +285,17 @@ model PasswordResetToken {
   used      Boolean  @default(false)
   expiresAt DateTime
   createdAt DateTime @default(now())
+}
+
+model TwoFactorSecret {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String   @unique @db.ObjectId
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  secret      String?
+  enabled     Boolean  @default(false)
+  backupCodes String[] @default([])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 // Manual tenant ratings removed; system is fully automated

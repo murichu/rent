@@ -178,6 +178,18 @@ const api = {
   ratings: {
     getTenantRating: (id) => apiClient.get(`/ratings/tenant/${id}`),
   },
+
+  // Two-Factor Authentication
+  twoFactor: {
+    getStatus: () => apiClient.get('/2fa/status'),
+    setup: () => apiClient.post('/2fa/setup'),
+    enable: (token) => apiClient.post('/2fa/enable', { token }),
+    disable: (token) => apiClient.post('/2fa/disable', { token }),
+    verify: (token) => apiClient.post('/2fa/verify', { token }),
+    sendEmailOTP: () => apiClient.post('/2fa/send-email-otp'),
+    verifyEmailOTP: (otp) => apiClient.post('/2fa/verify-email-otp', { otp }),
+    regenerateBackupCodes: (token) => apiClient.post('/2fa/regenerate-backup-codes', { token }),
+  },
 };
 
 export default api;

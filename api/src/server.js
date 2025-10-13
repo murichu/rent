@@ -80,6 +80,7 @@ v1Router.use("/units", unitRouter);
 v1Router.use("/notices", noticeRouter);
 v1Router.use("/penalties", penaltyRouter);
 v1Router.use("/ratings", ratingRouter);
+v1Router.use("/2fa", twoFactorRouter);
 
 // Mount v1 router
 app.use("/api/v1", v1Router);
