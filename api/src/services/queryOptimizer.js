@@ -1,5 +1,6 @@
 import { prisma } from "../db.js";
 import logger from "../utils/logger.js";
+import queryResultOptimizer from "./queryResultOptimizer.js";
 
 /**
  * Query optimization service with pagination, includes, and performance monitoring
@@ -10,11 +11,18 @@ const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 100;
 
 /**
- * Parse pagination parameters from request query
+ * Parse pagination parameters from request query with memory optimization
  */
 export const parsePagination = (query) => {
-  const page = Math.max(1, parseInt(query.page) || 1);
-  const limit = Math.min(MAX_PAGE_SIZE, Math.max(1, parseInt(query.limit) || DEFAULT_PAGE_SIZE));
+  // Validate and sanitize query parameters
+  const sanitizedQuery = queryResultOptimizer.validateQueryParams(query);
+  
+  const page = Math.max(1, parseInt(sanitizedQuery.page) || 1);
+  let limit = Math.min(MAX_PAGE_SIZE, Math.max(1, parseInt(sanitizedQuery.limit) || DEFAULT_PAGE_SIZE));
+  
+  // Apply memory-based limit optimization
+  limit = queryResultOptimizer.getMemoryOptimizedLimit(limit, DEFAULT_PAGE_SIZE);
+  
   const skip = (page - 1) * limit;
   
   return { page, limit, skip };
@@ -62,6 +70,7 @@ export const getPropertiesOptimized = async (agencyId, options = {}) => {
   }
   
   const startTime = Date.now();
+  const memoryBefore = process.memoryUsage();
   
   const [properties, total] = await Promise.all([
     prisma.property.findMany({
@@ -74,18 +83,20 @@ export const getPropertiesOptimized = async (agencyId, options = {}) => {
     prisma.property.count({ where })
   ]);
   
-  const duration = Date.now() - startTime;
-  logger.debug('Properties query executed', {
-    agencyId,
-    duration: `${duration}ms`,
-    count: properties.length,
-    total,
-    page,
-    limit
+  const memoryAfter = process.memoryUsage();
+  
+  // Optimize query results for memory and serialization
+  const optimizedProperties = queryResultOptimizer.optimizeQueryResults(properties, {
+    entityType: 'property',
+    selectionLevel: includeUnits || includeLeases ? 'detailed' : 'standard',
+    memoryOptimize: true
   });
   
+  // Log performance metrics
+  queryResultOptimizer.logQueryMetrics('getPropertiesOptimized', startTime, properties.length, memoryBefore, memoryAfter);
+  
   return {
-    data: properties,
+    data: optimizedProperties,
     pagination: {
       page,
       limit,
@@ -93,6 +104,11 @@ export const getPropertiesOptimized = async (agencyId, options = {}) => {
       pages: Math.ceil(total / limit),
       hasNext: page * limit < total,
       hasPrev: page > 1
+    },
+    meta: {
+      originalCount: properties.length,
+      optimizedCount: optimizedProperties.length,
+      memoryUsage: Math.round(memoryAfter.heapUsed / 1024 / 1024)
     }
   };
 };
@@ -113,6 +129,7 @@ export const getPaymentsOptimized = async (agencyId, options = {}) => {
   }
   
   const startTime = Date.now();
+  const memoryBefore = process.memoryUsage();
   
   const [payments, total] = await Promise.all([
     prisma.payment.findMany({
@@ -160,18 +177,20 @@ export const getPaymentsOptimized = async (agencyId, options = {}) => {
     prisma.payment.count({ where })
   ]);
   
-  const duration = Date.now() - startTime;
-  logger.debug('Payments query executed', {
-    agencyId,
-    duration: `${duration}ms`,
-    count: payments.length,
-    total,
-    page,
-    limit
+  const memoryAfter = process.memoryUsage();
+  
+  // Optimize query results for memory and serialization
+  const optimizedPayments = queryResultOptimizer.optimizeQueryResults(payments, {
+    entityType: 'payment',
+    selectionLevel: 'detailed',
+    memoryOptimize: true
   });
   
+  // Log performance metrics
+  queryResultOptimizer.logQueryMetrics('getPaymentsOptimized', startTime, payments.length, memoryBefore, memoryAfter);
+  
   return {
-    data: payments,
+    data: optimizedPayments,
     pagination: {
       page,
       limit,
@@ -179,6 +198,11 @@ export const getPaymentsOptimized = async (agencyId, options = {}) => {
       pages: Math.ceil(total / limit),
       hasNext: page * limit < total,
       hasPrev: page > 1
+    },
+    meta: {
+      originalCount: payments.length,
+      optimizedCount: optimizedPayments.length,
+      memoryUsage: Math.round(memoryAfter.heapUsed / 1024 / 1024)
     }
   };
 };
@@ -360,6 +384,7 @@ export const getTenantsOptimized = async (agencyId, options = {}) => {
   }
   
   const startTime = Date.now();
+  const memoryBefore = process.memoryUsage();
   
   const [tenants, total] = await Promise.all([
     prisma.tenant.findMany({
@@ -372,18 +397,20 @@ export const getTenantsOptimized = async (agencyId, options = {}) => {
     prisma.tenant.count({ where })
   ]);
   
-  const duration = Date.now() - startTime;
-  logger.debug('Tenants query executed', {
-    agencyId,
-    duration: `${duration}ms`,
-    count: tenants.length,
-    total,
-    page,
-    limit
+  const memoryAfter = process.memoryUsage();
+  
+  // Optimize query results for memory and serialization
+  const optimizedTenants = queryResultOptimizer.optimizeQueryResults(tenants, {
+    entityType: 'tenant',
+    selectionLevel: includeLeases ? 'detailed' : 'standard',
+    memoryOptimize: true
   });
   
+  // Log performance metrics
+  queryResultOptimizer.logQueryMetrics('getTenantsOptimized', startTime, tenants.length, memoryBefore, memoryAfter);
+  
   return {
-    data: tenants,
+    data: optimizedTenants,
     pagination: {
       page,
       limit,
@@ -391,6 +418,11 @@ export const getTenantsOptimized = async (agencyId, options = {}) => {
       pages: Math.ceil(total / limit),
       hasNext: page * limit < total,
       hasPrev: page > 1
+    },
+    meta: {
+      originalCount: tenants.length,
+      optimizedCount: optimizedTenants.length,
+      memoryUsage: Math.round(memoryAfter.heapUsed / 1024 / 1024)
     }
   };
 };
@@ -411,6 +443,7 @@ export const getInvoicesOptimized = async (agencyId, options = {}) => {
   }
   
   const startTime = Date.now();
+  const memoryBefore = process.memoryUsage();
   
   const [invoices, total] = await Promise.all([
     prisma.invoice.findMany({
@@ -458,18 +491,20 @@ export const getInvoicesOptimized = async (agencyId, options = {}) => {
     prisma.invoice.count({ where })
   ]);
   
-  const duration = Date.now() - startTime;
-  logger.debug('Invoices query executed', {
-    agencyId,
-    duration: `${duration}ms`,
-    count: invoices.length,
-    total,
-    page,
-    limit
+  const memoryAfter = process.memoryUsage();
+  
+  // Optimize query results for memory and serialization
+  const optimizedInvoices = queryResultOptimizer.optimizeQueryResults(invoices, {
+    entityType: 'invoice',
+    selectionLevel: 'detailed',
+    memoryOptimize: true
   });
   
+  // Log performance metrics
+  queryResultOptimizer.logQueryMetrics('getInvoicesOptimized', startTime, invoices.length, memoryBefore, memoryAfter);
+  
   return {
-    data: invoices,
+    data: optimizedInvoices,
     pagination: {
       page,
       limit,
@@ -477,6 +512,11 @@ export const getInvoicesOptimized = async (agencyId, options = {}) => {
       pages: Math.ceil(total / limit),
       hasNext: page * limit < total,
       hasPrev: page > 1
+    },
+    meta: {
+      originalCount: invoices.length,
+      optimizedCount: optimizedInvoices.length,
+      memoryUsage: Math.round(memoryAfter.heapUsed / 1024 / 1024)
     }
   };
 };

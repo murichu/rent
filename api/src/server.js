@@ -20,6 +20,8 @@ import { ratingRouter } from "./routes/ratings.js";
 import { monitoringRouter } from "./routes/monitoring.js";
 import { bulkRouter } from "./routes/bulk.js";
 import cacheRouter from "./routes/cache.js";
+import memoryRouter from "./routes/memory.js";
+import uploadRouter from "./routes/uploads.js";
 import cacheManager from "./services/cacheManager.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { enhancedApiLimiter, authLimiter, adminBypass } from "./middleware/rateLimiter.js";
@@ -44,6 +46,13 @@ if (process.env.ENABLE_CRON_JOBS !== 'false') {
 cacheManager.initialize().catch(error => {
   logger.error('Failed to initialize cache manager:', error);
 });
+
+// Initialize memory monitoring
+import memoryOptimizer from "./services/memoryOptimizer.js";
+if (process.env.ENABLE_MEMORY_MONITORING !== 'false') {
+  memoryOptimizer.startMonitoring(60000); // Monitor every minute
+  logger.info('Memory monitoring initialized');
+}
 
 const app = express();
 
@@ -241,6 +250,8 @@ v1Router.use("/ratings", ratingRouter);
 v1Router.use("/monitoring", monitoringRouter);
 v1Router.use("/bulk", bulkRouter);
 v1Router.use("/cache", cacheRouter);
+v1Router.use("/memory", memoryRouter);
+v1Router.use("/uploads", uploadRouter);
 v1Router.use("/circuit-breakers", circuitBreakerRouter);
 v1Router.use("/test-circuit-breaker", testCircuitBreakerRouter);
 v1Router.use("/load-balancer", loadBalancerRouter);

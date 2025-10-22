@@ -2,15 +2,72 @@ import { Router } from "express";
 import { prisma } from "../db.js";
 import { z } from "zod";
 import { requireAuth } from "../middleware/auth.js";
+import { getInvoicesOptimized, queryTimeMiddleware } from "../services/queryOptimizer.js";
+import { cacheMiddleware, invalidateCacheMiddleware, cacheInvalidationPatterns } from "../middleware/cache.js";
+import { paginate } from "../middleware/pagination.js";
 
 export const invoiceRouter = Router();
 
 invoiceRouter.use(requireAuth);
+invoiceRouter.use(queryTimeMiddleware);
+invoiceRouter.use(paginate({ maxLimit: 100, memoryLimit: 100 * 1024 * 1024 })); // 100MB memory limit
 
-invoiceRouter.get("/", async (req, res) => {
-  const items = await prisma.invoice.findMany({ where: { agencyId: req.user.agencyId } });
-  res.json(items);
-});
+// Optimized invoices list with pagination, filtering, and streaming support
+invoiceRouter.get("/", 
+  cacheMiddleware({ 
+    ttl: 600, // 10 minutes
+    keyGenerator: (req) => {
+      const { page = 1, limit = 50, status, leaseId, overdue, stream } = req.query;
+      return `invoices:${req.user.agencyId}:list:page:${page}:limit:${limit}:status:${status || 'all'}:lease:${leaseId || 'all'}:overdue:${overdue || 'false'}:stream:${stream || 'false'}`;
+    }
+  }),
+  async (req, res) => {
+    try {
+      const options = {
+        page: req.query.page,
+        limit: req.query.limit,
+        status: req.query.status,
+        leaseId: req.query.leaseId,
+        overdue: req.query.overdue === 'true',
+        stream: req.query.stream === 'true'
+      };
+      
+      // Handle streaming requests for large datasets
+      if (options.stream) {
+        const { default: streamingService } = await import('../services/streamingService.js');
+        
+        const invoiceStream = await streamingService.streamInvoices(req.user.agencyId, options);
+        const csvHeaders = [
+          'id', 'amount', 'status', 'dueAt', 'issuedAt', 'totalPaid',
+          'lease.tenant.name', 'lease.tenant.email', 'lease.tenant.phone',
+          'lease.property.title', 'lease.property.address', 'lease.unit.unitNumber'
+        ];
+        
+        const csvTransform = streamingService.createCSVTransform(csvHeaders);
+        const monitoringStream = streamingService.createMonitoringStream('invoices-export');
+        
+        // Set up streaming response
+        res.streamPaginate(
+          invoiceStream.pipe(csvTransform).pipe(monitoringStream),
+          {
+            contentType: 'text/csv',
+            filename: `invoices-${req.user.agencyId}-${new Date().toISOString().split('T')[0]}.csv`,
+            headers: {
+              'X-Stream-Type': 'invoices',
+              'X-Agency-Id': req.user.agencyId
+            }
+          }
+        );
+        return;
+      }
+      
+      const result = await getInvoicesOptimized(req.user.agencyId, options);
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch invoices" });
+    }
+  }
+);
 
 invoiceRouter.get("/generate/:leaseId", async (req, res) => {
   const lease = await prisma.lease.findFirst({ where: { id: req.params.leaseId, agencyId: req.user.agencyId } });

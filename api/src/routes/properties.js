@@ -5,10 +5,18 @@ import { requireAuth } from "../middleware/auth.js";
 import { getPropertiesOptimized, queryTimeMiddleware } from "../services/queryOptimizer.js";
 import { cacheMiddleware, invalidateCacheMiddleware, cacheInvalidationPatterns } from "../middleware/cache.js";
 import dashboardCacheService from "../services/dashboardCache.js";
+import { paginate } from "../middleware/pagination.js";
+import { createResultLimiter } from "../middleware/resultLimiter.js";
 
 export const propertyRouter = Router();
 propertyRouter.use(requireAuth);
 propertyRouter.use(queryTimeMiddleware);
+propertyRouter.use(paginate({ maxLimit: 100, memoryLimit: 100 * 1024 * 1024 })); // 100MB memory limit
+propertyRouter.use(createResultLimiter({ 
+  maxResults: 500, 
+  entityType: 'property',
+  enableMemoryMonitoring: true 
+}));
 
 const propertySchema = z.object({
   title: z.string().min(1),
@@ -28,13 +36,13 @@ const propertySchema = z.object({
   ])
 });
 
-// Optimized properties list with pagination and filtering
+// Optimized properties list with pagination, filtering, and streaming support
 propertyRouter.get("/", 
   cacheMiddleware({ 
     ttl: 600, // 10 minutes
     keyGenerator: (req) => {
-      const { page = 1, limit = 50, status, includeUnits, includeLeases } = req.query;
-      return `properties:${req.user.agencyId}:list:page:${page}:limit:${limit}:status:${status || 'all'}:units:${includeUnits || 'false'}:leases:${includeLeases || 'false'}`;
+      const { page = 1, limit = 50, status, includeUnits, includeLeases, stream } = req.query;
+      return `properties:${req.user.agencyId}:list:page:${page}:limit:${limit}:status:${status || 'all'}:units:${includeUnits || 'false'}:leases:${includeLeases || 'false'}:stream:${stream || 'false'}`;
     }
   }),
   async (req, res) => {
@@ -44,8 +52,37 @@ propertyRouter.get("/",
         limit: req.query.limit,
         status: req.query.status,
         includeUnits: req.query.includeUnits === 'true',
-        includeLeases: req.query.includeLeases === 'true'
+        includeLeases: req.query.includeLeases === 'true',
+        stream: req.query.stream === 'true'
       };
+      
+      // Handle streaming requests for large datasets
+      if (options.stream) {
+        const { default: streamingService } = await import('../services/streamingService.js');
+        
+        const propertyStream = await streamingService.streamProperties(req.user.agencyId, options);
+        const csvHeaders = [
+          'id', 'title', 'address', 'city', 'state', 'zip', 
+          'bedrooms', 'bathrooms', 'sizeSqFt', 'rentAmount', 'status', 'type'
+        ];
+        
+        const csvTransform = streamingService.createCSVTransform(csvHeaders);
+        const monitoringStream = streamingService.createMonitoringStream('properties-export');
+        
+        // Set up streaming response
+        res.streamPaginate(
+          propertyStream.pipe(csvTransform).pipe(monitoringStream),
+          {
+            contentType: 'text/csv',
+            filename: `properties-${req.user.agencyId}-${new Date().toISOString().split('T')[0]}.csv`,
+            headers: {
+              'X-Stream-Type': 'properties',
+              'X-Agency-Id': req.user.agencyId
+            }
+          }
+        );
+        return;
+      }
       
       // Try to get from dashboard cache first for basic property list
       if (!options.includeUnits && !options.includeLeases && !options.status) {

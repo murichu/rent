@@ -1,0 +1,75 @@
+config:
+  target: 'http://localhost:3000'
+  phases:
+    - duration: 60
+      arrivalRate: 10
+      name: "Warm up"
+    - duration: 120
+      arrivalRate: 50
+      name: "Ramp up load"
+    - duration: 180
+      arrivalRate: 100
+      name: "Sustained high load"
+    - duration: 60
+      arrivalRate: 10
+      name: "Cool down"
+  defaults:
+    headers:
+      Authorization: 'Bearer test-token'
+      Content-Type: 'application/json'
+
+scenarios:
+  - name: "Dashboard Load Test"
+    weight: 30
+    flow:
+      - get:
+          url: "/api/dashboard/stats"
+      - get:
+          url: "/api/properties?page=1&limit=50"
+      - get:
+          url: "/api/tenants?page=1&limit=50"
+
+  - name: "Property Management"
+    weight: 25
+    flow:
+      - get:
+          url: "/api/properties"
+      - get:
+          url: "/api/properties/{{ $randomString() }}"
+      - post:
+          url: "/api/properties"
+          json:
+            name: "Test Property {{ $randomString() }}"
+            location: "Test Location"
+            type: "apartment"
+
+  - name: "Payment Processing"
+    weight: 20
+    flow:
+      - post:
+          url: "/api/payments/mpesa/stk-push"
+          json:
+            phoneNumber: "254700000000"
+            amount: 1000
+            leaseId: "test-lease-{{ $randomString() }}"
+
+  - name: "Tenant Operations"
+    weight: 15
+    flow:
+      - get:
+          url: "/api/tenants"
+      - get:
+          url: "/api/tenants/{{ $randomString() }}/payments"
+      - get:
+          url: "/api/tenants/{{ $randomString() }}/invoices"
+
+  - name: "Bulk Operations"
+    weight: 10
+    flow:
+      - post:
+          url: "/api/properties/export"
+          json:
+            format: "csv"
+            filters: {}
+      - get:
+          url: "/api/reports/financial"

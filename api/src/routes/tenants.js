@@ -4,10 +4,18 @@ import { z } from "zod";
 import { requireAuth } from "../middleware/auth.js";
 import { cacheMiddleware, invalidateCacheMiddleware, cacheInvalidationPatterns } from "../middleware/cache.js";
 import dashboardCacheService from "../services/dashboardCache.js";
+import { paginate } from "../middleware/pagination.js";
+import { createResultLimiter } from "../middleware/resultLimiter.js";
 
 export const tenantRouter = Router();
 
 tenantRouter.use(requireAuth);
+tenantRouter.use(paginate({ maxLimit: 100, memoryLimit: 100 * 1024 * 1024 })); // 100MB memory limit
+tenantRouter.use(createResultLimiter({ 
+  maxResults: 500, 
+  entityType: 'tenant',
+  enableMemoryMonitoring: true 
+}));
 
 const tenantSchema = z.object({
   name: z.string().min(1),
@@ -18,22 +26,72 @@ const tenantSchema = z.object({
 tenantRouter.get("/", 
   cacheMiddleware({ 
     ttl: 600, // 10 minutes
-    keyGenerator: (req) => `tenants:${req.user.agencyId}:list`
+    keyGenerator: (req) => {
+      const { page = 1, limit = 50, search, includeLeases, stream } = req.query;
+      return `tenants:${req.user.agencyId}:list:page:${page}:limit:${limit}:search:${search || ''}:leases:${includeLeases || 'false'}:stream:${stream || 'false'}`;
+    }
   }),
   async (req, res) => {
-    // Try to get from dashboard cache first
-    const cachedTenants = await dashboardCacheService.getTenantList(req.user.agencyId);
-    
-    if (cachedTenants) {
-      return res.json(cachedTenants);
+    try {
+      const options = {
+        page: req.query.page,
+        limit: req.query.limit,
+        search: req.query.search,
+        includeLeases: req.query.includeLeases === 'true',
+        stream: req.query.stream === 'true'
+      };
+
+      // Handle streaming requests for large datasets
+      if (options.stream) {
+        const { default: streamingService } = await import('../services/streamingService.js');
+        
+        const tenantStream = await streamingService.streamTenants(req.user.agencyId, options);
+        const csvHeaders = ['id', 'name', 'email', 'phone', 'createdAt'];
+        
+        if (options.includeLeases) {
+          csvHeaders.push('lease.property.title', 'lease.unit.unitNumber', 'lease.rentAmount', 'lease.startDate');
+        }
+        
+        const csvTransform = streamingService.createCSVTransform(csvHeaders);
+        const monitoringStream = streamingService.createMonitoringStream('tenants-export');
+        
+        // Set up streaming response
+        res.streamPaginate(
+          tenantStream.pipe(csvTransform).pipe(monitoringStream),
+          {
+            contentType: 'text/csv',
+            filename: `tenants-${req.user.agencyId}-${new Date().toISOString().split('T')[0]}.csv`,
+            headers: {
+              'X-Stream-Type': 'tenants',
+              'X-Agency-Id': req.user.agencyId
+            }
+          }
+        );
+        return;
+      }
+
+      // For basic tenant list without search or includes, try cache first
+      if (!options.search && !options.includeLeases && !options.page && !options.limit) {
+        const cachedTenants = await dashboardCacheService.getTenantList(req.user.agencyId);
+        
+        if (cachedTenants) {
+          return res.json(cachedTenants);
+        }
+      }
+
+      // Use optimized query with pagination
+      const { getTenantsOptimized } = await import('../services/queryOptimizer.js');
+      const result = await getTenantsOptimized(req.user.agencyId, options);
+      
+      // Cache basic tenant list if applicable
+      if (!options.search && !options.includeLeases && !options.page && !options.limit) {
+        await dashboardCacheService.setTenantList(req.user.agencyId, result.data);
+      }
+      
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch tenants" });
     }
-    
-    const items = await prisma.tenant.findMany({ where: { agencyId: req.user.agencyId } });
-    
-    // Cache the tenant list
-    await dashboardCacheService.setTenantList(req.user.agencyId, items);
-    
-    res.json(items);
   }
 );
 
