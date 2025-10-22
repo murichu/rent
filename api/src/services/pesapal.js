@@ -2,6 +2,7 @@ import axios from 'axios';
 import crypto from 'crypto';
 import logger from '../utils/logger.js';
 import { prisma } from '../db.js';
+import { pesapalCircuitBreaker } from './circuitBreaker.js';
 
 /**
  * Pesapal Payment Integration (Kenya)
@@ -23,10 +24,10 @@ const getBaseUrl = () => {
 };
 
 /**
- * Get OAuth access token
+ * Get OAuth access token with circuit breaker protection
  */
 export async function getPesapalAccessToken() {
-  try {
+  return await pesapalCircuitBreaker.execute(async () => {
     const response = await axios.post(
       `${getBaseUrl()}/api/Auth/RequestToken`,
       {
@@ -38,15 +39,13 @@ export async function getPesapalAccessToken() {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
+        timeout: 25000, // 25 second timeout (within circuit breaker's 30s limit)
       }
     );
 
     logger.info('Pesapal access token generated');
     return response.data.token;
-  } catch (error) {
-    logger.error('Failed to get Pesapal token:', error.response?.data || error.message);
-    throw new Error('Failed to authenticate with Pesapal');
-  }
+  });
 }
 
 /**
@@ -71,10 +70,10 @@ export function calculatePesapalFees(amount) {
 }
 
 /**
- * Register IPN URL (one-time setup)
+ * Register IPN URL (one-time setup) with circuit breaker protection
  */
 export async function registerPesapalIPN() {
-  try {
+  return await pesapalCircuitBreaker.execute(async () => {
     const token = await getPesapalAccessToken();
 
     const response = await axios.post(
@@ -88,15 +87,13 @@ export async function registerPesapalIPN() {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
+        timeout: 25000, // 25 second timeout (within circuit breaker's 30s limit)
       }
     );
 
     logger.info('Pesapal IPN registered:', response.data);
     return response.data;
-  } catch (error) {
-    logger.error('Failed to register IPN:', error.response?.data || error.message);
-    throw error;
-  }
+  });
 }
 
 /**
@@ -144,16 +141,19 @@ export async function initiatePesapalPayment(orderData) {
       totalAmount: pricing.totalAmount,
     });
 
-    const response = await axios.post(
-      `${getBaseUrl()}/api/Transactions/SubmitOrderRequest`,
-      requestData,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
+    const response = await pesapalCircuitBreaker.execute(async () => {
+      return await axios.post(
+        `${getBaseUrl()}/api/Transactions/SubmitOrderRequest`,
+        requestData,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 25000, // 25 second timeout (within circuit breaker's 30s limit)
+        }
+      );
+    });
 
     // Store transaction
     await prisma.pesapalTransaction.create({
@@ -199,15 +199,18 @@ export async function getPesapalTransactionStatus(orderTrackingId) {
   try {
     const token = await getPesapalAccessToken();
 
-    const response = await axios.get(
-      `${getBaseUrl()}/api/Transactions/GetTransactionStatus?orderTrackingId=${orderTrackingId}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json',
-        },
-      }
-    );
+    const response = await pesapalCircuitBreaker.execute(async () => {
+      return await axios.get(
+        `${getBaseUrl()}/api/Transactions/GetTransactionStatus?orderTrackingId=${orderTrackingId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json',
+          },
+          timeout: 25000, // 25 second timeout (within circuit breaker's 30s limit)
+        }
+      );
+    });
 
     logger.info('Pesapal status retrieved:', {
       orderTrackingId,

@@ -2,6 +2,8 @@ import { Router } from "express";
 import { prisma } from "../db.js";
 import { z } from "zod";
 import { requireAuth } from "../middleware/auth.js";
+import { cacheMiddleware, invalidateCacheMiddleware, cacheInvalidationPatterns } from "../middleware/cache.js";
+import dashboardCacheService from "../services/dashboardCache.js";
 
 export const tenantRouter = Router();
 
@@ -13,17 +15,46 @@ const tenantSchema = z.object({
   phone: z.string().optional(),
 });
 
-tenantRouter.get("/", async (req, res) => {
-  const items = await prisma.tenant.findMany({ where: { agencyId: req.user.agencyId } });
-  res.json(items);
-});
+tenantRouter.get("/", 
+  cacheMiddleware({ 
+    ttl: 600, // 10 minutes
+    keyGenerator: (req) => `tenants:${req.user.agencyId}:list`
+  }),
+  async (req, res) => {
+    // Try to get from dashboard cache first
+    const cachedTenants = await dashboardCacheService.getTenantList(req.user.agencyId);
+    
+    if (cachedTenants) {
+      return res.json(cachedTenants);
+    }
+    
+    const items = await prisma.tenant.findMany({ where: { agencyId: req.user.agencyId } });
+    
+    // Cache the tenant list
+    await dashboardCacheService.setTenantList(req.user.agencyId, items);
+    
+    res.json(items);
+  }
+);
 
-tenantRouter.post("/", async (req, res) => {
-  const parsed = tenantSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json(parsed.error.flatten());
-  const created = await prisma.tenant.create({ data: { ...parsed.data, agencyId: req.user.agencyId } });
-  res.status(201).json(created);
-});
+tenantRouter.post("/", 
+  invalidateCacheMiddleware([
+    cacheInvalidationPatterns.tenants,
+    cacheInvalidationPatterns.dashboard,
+    cacheInvalidationPatterns.apiResponses
+  ]),
+  async (req, res) => {
+    const parsed = tenantSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json(parsed.error.flatten());
+    
+    const created = await prisma.tenant.create({ data: { ...parsed.data, agencyId: req.user.agencyId } });
+    
+    // Invalidate dashboard cache for tenant-related data
+    await dashboardCacheService.invalidateOnDataUpdate(req.user.agencyId, 'tenant');
+    
+    res.status(201).json(created);
+  }
+);
 
 tenantRouter.get(":id", async (req, res) => {
   const item = await prisma.tenant.findFirst({ where: { id: req.params.id, agencyId: req.user.agencyId } });

@@ -1,5 +1,6 @@
 import axios from 'axios';
 import logger from '../utils/logger.js';
+import circuitBreakerManager from './circuitBreaker.js';
 
 /**
  * WhatsApp Business API Integration
@@ -14,11 +15,18 @@ const WHATSAPP_CONFIG = {
   provider: process.env.WHATSAPP_PROVIDER || 'africastalking', // 'africastalking' or 'meta'
 };
 
+// Get circuit breaker for WhatsApp service
+const whatsappCircuitBreaker = circuitBreakerManager.getBreaker('whatsapp', {
+  failureThreshold: 5,
+  timeout: 15000, // 15 seconds for messaging
+  resetTimeout: 60000 // 1 minute
+});
+
 /**
- * Send WhatsApp message (text)
+ * Send WhatsApp message (text) with circuit breaker protection
  */
 export async function sendWhatsAppMessage(to, message) {
-  try {
+  return await whatsappCircuitBreaker.execute(async () => {
     const formattedPhone = to.startsWith('+') ? to : `+${to}`;
 
     if (WHATSAPP_CONFIG.provider === 'africastalking') {
@@ -36,6 +44,7 @@ export async function sendWhatsAppMessage(to, message) {
             'apiKey': WHATSAPP_CONFIG.apiKey,
             'Content-Type': 'application/json',
           },
+          timeout: 12000, // 12 second timeout (within circuit breaker's 15s limit)
         }
       );
 
@@ -60,6 +69,7 @@ export async function sendWhatsAppMessage(to, message) {
             'Authorization': `Bearer ${WHATSAPP_CONFIG.accessToken}`,
             'Content-Type': 'application/json',
           },
+          timeout: 12000, // 12 second timeout (within circuit breaker's 15s limit)
         }
       );
 
@@ -70,10 +80,7 @@ export async function sendWhatsAppMessage(to, message) {
 
       return { success: true, provider: 'meta' };
     }
-  } catch (error) {
-    logger.error('WhatsApp sending failed:', error.response?.data || error.message);
-    throw new Error('Failed to send WhatsApp message');
-  }
+  });
 }
 
 /**
@@ -208,10 +215,10 @@ export function generateWhatsAppLink(phoneNumber, message = '') {
 }
 
 /**
- * Send WhatsApp template message (for business API)
+ * Send WhatsApp template message (for business API) with circuit breaker protection
  */
 export async function sendWhatsAppTemplate(to, templateName, parameters) {
-  try {
+  return await whatsappCircuitBreaker.execute(async () => {
     if (WHATSAPP_CONFIG.provider !== 'meta') {
       throw new Error('Template messages only available with Meta WhatsApp API');
     }
@@ -240,6 +247,7 @@ export async function sendWhatsAppTemplate(to, templateName, parameters) {
           'Authorization': `Bearer ${WHATSAPP_CONFIG.accessToken}`,
           'Content-Type': 'application/json',
         },
+        timeout: 12000, // 12 second timeout (within circuit breaker's 15s limit)
       }
     );
 
@@ -249,8 +257,5 @@ export async function sendWhatsAppTemplate(to, templateName, parameters) {
     });
 
     return { success: true };
-  } catch (error) {
-    logger.error('WhatsApp template failed:', error.response?.data || error.message);
-    throw error;
-  }
+  });
 }

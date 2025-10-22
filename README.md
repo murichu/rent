@@ -264,7 +264,7 @@ rent/
 │   │   └── server.js       # Express app entry
 │   ├── prisma/
 │   │   ├── schema.prisma   # Database schema
-│   │   └── seed.ts         # Database seeding
+│   │   └── seed.js         # Database seeding
 │   ├── .env.example
 │   └── package.json
 ├── frontend/                 # React frontend

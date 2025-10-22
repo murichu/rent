@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import logger from '../utils/logger.js';
+import { emailCircuitBreaker } from './circuitBreaker.js';
 
 // Create transporter
 const createTransporter = () => {
@@ -39,7 +40,9 @@ export async function sendVerificationEmail(email, token) {
   };
 
   try {
-    await transporter.sendMail(mailOptions);
+    await emailCircuitBreaker.execute(async () => {
+      await transporter.sendMail(mailOptions);
+    });
     logger.info(`Verification email sent to ${email}`);
     return true;
   } catch (error) {

@@ -101,6 +101,13 @@ model Property {
   expenses   Expense[]
   systemFeeConfig SystemFeeConfig?
   settings   PropertySettings?
+
+  @@index([city])
+  @@index([status])
+  @@index([agencyId])
+  @@index([status, agencyId])
+  @@index([city, status])
+  @@index([type, status])
 }
 
 model Tenant {
@@ -116,6 +123,12 @@ model Tenant {
   isHighRisk    Boolean @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([email])
+  @@index([phone])
+  @@index([agencyId])
+  @@index([email, agencyId])
+  @@index([phone, agencyId])
 }
 
 model Lease {
@@ -193,6 +206,14 @@ model Invoice {
   updatedAt   DateTime      @updatedAt
   payments    Payment[]
   penalties   Penalty[]
+
+  @@index([status])
+  @@index([dueAt])
+  @@index([leaseId])
+  @@index([agencyId])
+  @@index([status, dueAt])
+  @@index([status, leaseId])
+  @@index([agencyId, status])
 }
 
 enum InvoiceStatus {
@@ -217,6 +238,13 @@ model Payment {
   agency    Agency   @relation(fields: [agencyId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([paidAt])
+  @@index([leaseId])
+  @@index([agencyId])
+  @@index([method])
+  @@index([paidAt, leaseId])
+  @@index([agencyId, paidAt])
 }
 
 enum ManagerRole {
@@ -750,3 +778,26 @@ model CardTransaction {
 }
 
 // Manual tenant ratings removed; system is fully automated
+
+// Callback Processing Log for Idempotent Handling
+model CallbackLog {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  callbackId        String    @unique // Hash of callback data for idempotency
+  checkoutRequestId String?   // For M-Pesa callbacks
+  transactionRef    String?   // For KCB callbacks
+  type              String    // MPESA_SUCCESS, MPESA_FAILED, KCB_SUCCESS, KCB_FAILED
+  processed         Boolean   @default(false)
+  paymentId         String?   @db.ObjectId // Reference to created payment
+  processingTime    Int?      // Processing time in milliseconds
+  metadata          String?   // JSON metadata from callback
+  retryCount        Int       @default(0)
+  lastRetryAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([callbackId])
+  @@index([checkoutRequestId])
+  @@index([transactionRef])
+  @@index([processed])
+  @@index([type])
+}

@@ -1,6 +1,7 @@
 import axios from 'axios';
 import logger from '../utils/logger.js';
 import { prisma } from '../db.js';
+import { pesapalCircuitBreaker } from './circuitBreaker.js';
 
 /**
  * Enhanced Pesapal Integration (Pesapal API v3)
@@ -33,19 +34,22 @@ export async function getPesapalToken() {
   }
 
   try {
-    const response = await axios.post(
-      `${getBaseUrl()}/api/Auth/RequestToken`,
-      {
-        consumer_key: PESAPAL_CONFIG.consumerKey,
-        consumer_secret: PESAPAL_CONFIG.consumerSecret,
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
+    const response = await pesapalCircuitBreaker.execute(async () => {
+      return await axios.post(
+        `${getBaseUrl()}/api/Auth/RequestToken`,
+        {
+          consumer_key: PESAPAL_CONFIG.consumerKey,
+          consumer_secret: PESAPAL_CONFIG.consumerSecret,
         },
-      }
-    );
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          timeout: 25000, // 25 second timeout (within circuit breaker's 30s limit)
+        }
+      );
+    });
 
     cachedToken = response.data.token;
     // Token expires in ~1 hour, refresh after 50 minutes
@@ -66,20 +70,23 @@ export async function registerIPN(ipnUrl = PESAPAL_CONFIG.ipnUrl) {
   try {
     const token = await getPesapalToken();
 
-    const response = await axios.post(
-      `${getBaseUrl()}/api/URLSetup/RegisterIPN`,
-      {
-        url: ipnUrl,
-        ipn_notification_type: 'GET',
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
+    const response = await pesapalCircuitBreaker.execute(async () => {
+      return await axios.post(
+        `${getBaseUrl()}/api/URLSetup/RegisterIPN`,
+        {
+          url: ipnUrl,
+          ipn_notification_type: 'GET',
         },
-      }
-    );
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          timeout: 25000, // 25 second timeout (within circuit breaker's 30s limit)
+        }
+      );
+    });
 
     logger.info('Pesapal IPN registered:', {
       ipn_id: response.data.ipn_id,
@@ -170,17 +177,20 @@ export async function submitPesapalOrder(orderData) {
       fees: pricing.totalFees,
     });
 
-    const response = await axios.post(
-      `${getBaseUrl()}/api/Transactions/SubmitOrderRequest`,
-      requestData,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-      }
-    );
+    const response = await pesapalCircuitBreaker.execute(async () => {
+      return await axios.post(
+        `${getBaseUrl()}/api/Transactions/SubmitOrderRequest`,
+        requestData,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          timeout: 25000, // 25 second timeout (within circuit breaker's 30s limit)
+        }
+      );
+    });
 
     // Store transaction in database
     await prisma.pesapalTransaction.create({
@@ -227,15 +237,18 @@ export async function getTransactionStatus(orderTrackingId) {
   try {
     const token = await getPesapalToken();
 
-    const response = await axios.get(
-      `${getBaseUrl()}/api/Transactions/GetTransactionStatus?orderTrackingId=${orderTrackingId}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json',
-        },
-      }
-    );
+    const response = await pesapalCircuitBreaker.execute(async () => {
+      return await axios.get(
+        `${getBaseUrl()}/api/Transactions/GetTransactionStatus?orderTrackingId=${orderTrackingId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json',
+          },
+          timeout: 25000, // 25 second timeout (within circuit breaker's 30s limit)
+        }
+      );
+    });
 
     const data = response.data;
 

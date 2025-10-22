@@ -1,5 +1,6 @@
 import AfricasTalking from 'africastalking';
 import logger from '../utils/logger.js';
+import { smsCircuitBreaker } from './circuitBreaker.js';
 
 /**
  * Africa's Talking SMS Service
@@ -18,7 +19,7 @@ const sms = africastalking.SMS;
  * Send SMS via Africa's Talking
  */
 export async function sendSMS(to, message) {
-  try {
+  return await smsCircuitBreaker.execute(async () => {
     // Format phone number (must be +254...)
     const formattedPhone = to.startsWith('+') ? to : `+${to}`;
 
@@ -40,10 +41,7 @@ export async function sendSMS(to, message) {
       messageId: result.SMSMessageData.Recipients[0].messageId,
       status: result.SMSMessageData.Recipients[0].status,
     };
-  } catch (error) {
-    logger.error('SMS sending failed:', error.message);
-    throw new Error('Failed to send SMS');
-  }
+  });
 }
 
 /**

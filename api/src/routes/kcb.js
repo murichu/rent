@@ -14,6 +14,9 @@ import {
   getKcbAccountBalance,
   KENYA_BANK_CODES,
 } from '../services/kcbBuni.js';
+import { 
+  processOptimizedKcbCallback 
+} from '../services/paymentCallbackOptimizer.js';
 import { successResponse, errorResponse } from '../utils/responses.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { auditLog } from '../utils/logger.js';
@@ -70,11 +73,20 @@ kcbRouter.post(
 /**
  * POST /kcb/mpesa-callback
  * KCB M-Pesa STK Push callback
+ * Uses optimized callback processor with idempotent handling
  */
 kcbRouter.post('/mpesa-callback', asyncHandler(async (req, res) => {
-  logger.info('KCB M-Pesa callback received');
-  await processKcbMpesaCallback(req.body);
-  return res.status(200).json({ status: 'success' });
+  try {
+    logger.info('KCB M-Pesa callback received');
+    const result = await processOptimizedKcbCallback(req.body);
+    return res.status(200).json({ 
+      status: 'success',
+      duplicate: result.duplicate || false
+    });
+  } catch (error) {
+    logger.error('Error processing KCB callback:', error);
+    return res.status(200).json({ status: 'error', message: error.message });
+  }
 }));
 
 /**

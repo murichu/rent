@@ -2,6 +2,7 @@ import axios from 'axios';
 import crypto from 'crypto';
 import logger from '../utils/logger.js';
 import { prisma } from '../db.js';
+import { kcbCircuitBreaker } from './circuitBreaker.js';
 
 /**
  * KCB Buni API Integration
@@ -20,10 +21,10 @@ const KCB_CONFIG = {
 };
 
 /**
- * Get KCB Buni OAuth access token
+ * Get KCB Buni OAuth access token with circuit breaker protection
  */
 export async function getKcbAccessToken() {
-  try {
+  return await kcbCircuitBreaker.execute(async () => {
     const auth = Buffer.from(`${KCB_CONFIG.clientId}:${KCB_CONFIG.clientSecret}`).toString('base64');
 
     const response = await axios.post(
@@ -34,15 +35,13 @@ export async function getKcbAccessToken() {
           'Authorization': `Basic ${auth}`,
           'Content-Type': 'application/x-www-form-urlencoded',
         },
+        timeout: 25000, // 25 second timeout (within circuit breaker's 30s limit)
       }
     );
 
     logger.info('KCB Buni access token generated');
     return response.data.access_token;
-  } catch (error) {
-    logger.error('Failed to get KCB access token:', error.response?.data || error.message);
-    throw new Error('Failed to authenticate with KCB Buni');
-  }
+  });
 }
 
 /**
@@ -93,16 +92,19 @@ export async function initiateKcbStkPush(phoneNumber, amount, accountReference, 
       reference: accountReference,
     });
 
-    const response = await axios.post(
-      `${KCB_CONFIG.baseUrl}/mm/api/request/v1.0.0/stkpush`,
-      requestData,
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
+    const response = await kcbCircuitBreaker.execute(async () => {
+      return await axios.post(
+        `${KCB_CONFIG.baseUrl}/mm/api/request/v1.0.0/stkpush`,
+        requestData,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 25000, // 25 second timeout (within circuit breaker's 30s limit)
+        }
+      );
+    });
 
     // Store transaction
     await prisma.kcbTransaction.create({
@@ -244,16 +246,19 @@ export async function getAccountStatement(startDate, endDate) {
       endDate: requestData.endDate,
     });
 
-    const response = await axios.post(
-      `${KCB_CONFIG.baseUrl}/account/api/v1.0.0/statement`,
-      requestData,
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
+    const response = await kcbCircuitBreaker.execute(async () => {
+      return await axios.post(
+        `${KCB_CONFIG.baseUrl}/account/api/v1.0.0/statement`,
+        requestData,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 25000, // 25 second timeout (within circuit breaker's 30s limit)
+        }
+      );
+    });
 
     // Store statement request
     await prisma.kcbStatementRequest.create({
@@ -315,16 +320,19 @@ export async function sendToBank(destinationBank, accountNumber, accountName, am
       reference: transactionRef,
     });
 
-    const response = await axios.post(
-      `${KCB_CONFIG.baseUrl}/payment/api/v1.0.0/sendtobank`,
-      requestData,
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
+    const response = await kcbCircuitBreaker.execute(async () => {
+      return await axios.post(
+        `${KCB_CONFIG.baseUrl}/payment/api/v1.0.0/sendtobank`,
+        requestData,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 25000, // 25 second timeout (within circuit breaker's 30s limit)
+        }
+      );
+    });
 
     // Store transaction
     await prisma.kcbTransaction.create({
@@ -385,16 +393,19 @@ export async function bankToBank(destinationAccount, accountName, amount, narrat
       amount,
     });
 
-    const response = await axios.post(
-      `${KCB_CONFIG.baseUrl}/payment/api/v1.0.0/banktobank`,
-      requestData,
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
+    const response = await kcbCircuitBreaker.execute(async () => {
+      return await axios.post(
+        `${KCB_CONFIG.baseUrl}/payment/api/v1.0.0/banktobank`,
+        requestData,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 25000, // 25 second timeout (within circuit breaker's 30s limit)
+        }
+      );
+    });
 
     // Store transaction
     await prisma.kcbTransaction.create({
@@ -456,16 +467,19 @@ export async function sendViaPesaLink(mobileNumber, destinationBank, amount, nar
       bank: destinationBank,
     });
 
-    const response = await axios.post(
-      `${KCB_CONFIG.baseUrl}/payment/api/v1.0.0/pesalink`,
-      requestData,
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
+    const response = await kcbCircuitBreaker.execute(async () => {
+      return await axios.post(
+        `${KCB_CONFIG.baseUrl}/payment/api/v1.0.0/pesalink`,
+        requestData,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 25000, // 25 second timeout (within circuit breaker's 30s limit)
+        }
+      );
+    });
 
     // Store transaction
     await prisma.kcbTransaction.create({

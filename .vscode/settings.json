@@ -3,5 +3,24 @@
         "chartjs",
         "Formik",
         "Signup"
+    ],
+    "kiroAgent.trustedCommands": [
+        "npx prisma db push",
+        "npm install --save prom-client response-time",
+        "npm run build",
+        "node test-monitoring.js",
+        "npm test",
+        "npm run",
+        "node test-performance-tracking.js",
+        "npm list | findstr \"ioredis redis\"",
+        "npm list ioredis redis",
+        "node test-health-check.js",
+        "npm run dev --silent &",
+        "npm install rate-limit-redis",
+        "npm install cookie-parser",
+        "node -c src/server.js",
+        "node -c src/middleware/rateLimiter.js",
+        "npm test -- circuitBreaker.test.js --run",
+        "node -c api/src/middleware/loadBalancer.js"
     ]
 }

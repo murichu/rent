@@ -1,6 +1,8 @@
 import axios from 'axios';
 import logger from '../utils/logger.js';
 import { prisma } from '../db.js';
+import { processConcurrentMpesaCallback } from './paymentConcurrencyHandler.js';
+import { mpesaCircuitBreaker } from './circuitBreaker.js';
 
 /**
  * Safaricom M-Pesa Daraja API Integration
@@ -24,10 +26,10 @@ const getBaseUrl = () => {
 };
 
 /**
- * Get OAuth access token
+ * Get OAuth access token with circuit breaker protection
  */
 export async function getMpesaAccessToken() {
-  try {
+  return await mpesaCircuitBreaker.execute(async () => {
     const auth = Buffer.from(
       `${MPESA_CONFIG.consumerKey}:${MPESA_CONFIG.consumerSecret}`
     ).toString('base64');
@@ -38,15 +40,14 @@ export async function getMpesaAccessToken() {
         headers: {
           Authorization: `Basic ${auth}`,
         },
+        timeout: 25000, // 25 second timeout (within circuit breaker's 30s limit)
       }
     );
 
     logger.info('M-Pesa access token generated successfully');
     return response.data.access_token;
-  } catch (error) {
-    logger.error('Failed to get M-Pesa access token:', error.response?.data || error.message);
-    throw new Error('Failed to authenticate with M-Pesa');
-  }
+  });
+}
 }
 
 /**
@@ -103,7 +104,7 @@ function formatPhoneNumber(phone) {
  * @returns {Object} STK Push response
  */
 export async function initiateStkPush(phoneNumber, amount, accountReference, transactionDesc = 'Payment') {
-  try {
+  return await mpesaCircuitBreaker.execute(async () => {
     const accessToken = await getMpesaAccessToken();
     const { password, timestamp } = generatePassword();
     const formattedPhone = formatPhoneNumber(phoneNumber);
@@ -136,6 +137,7 @@ export async function initiateStkPush(phoneNumber, amount, accountReference, tra
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
+        timeout: 25000, // 25 second timeout
       }
     );
 
@@ -814,4 +816,20 @@ export async function getDetailedTransactionStatus(checkoutRequestId) {
     userMessage,
     statusIcon: transaction.status === 'SUCCESS' ? '✅' : transaction.status === 'FAILED' ? '❌' : '⏳',
   };
+}
+/**
+ * Process M-Pesa callback with concurrency control
+ * Alternative to processMpesaCallback with better race condition handling
+ */
+export async function processMpesaCallbackConcurrent(callbackData) {
+  try {
+    const { Body } = callbackData;
+    const { stkCallback } = Body;
+    const { CheckoutRequestID } = stkCallback;
+
+    return await processConcurrentMpesaCallback(CheckoutRequestID, callbackData);
+  } catch (error) {
+    logger.error('Error in concurrent M-Pesa callback processing:', error);
+    throw error;
+  }
 }

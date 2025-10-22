@@ -16,6 +16,10 @@ import {
   getLatestAccountBalance,
   getDetailedTransactionStatus,
 } from '../services/mpesa.js';
+import { 
+  processOptimizedMpesaCallback,
+  getCallbackMetrics 
+} from '../services/paymentCallbackOptimizer.js';
 import { successResponse, errorResponse } from '../utils/responses.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { auditLog } from '../utils/logger.js';
@@ -116,6 +120,7 @@ mpesaRouter.get(
  * POST /mpesa/callback
  * M-Pesa callback endpoint (called by Safaricom)
  * This endpoint should NOT require auth as it's called by M-Pesa servers
+ * Uses optimized callback processor with idempotent handling
  */
 mpesaRouter.post(
   '/callback',
@@ -123,12 +128,13 @@ mpesaRouter.post(
     try {
       logger.info('M-Pesa callback received:', JSON.stringify(req.body));
 
-      await processMpesaCallback(req.body);
+      // Use optimized callback processor
+      const result = await processOptimizedMpesaCallback(req.body);
 
       // M-Pesa expects a 200 response
       return res.status(200).json({
         ResultCode: 0,
-        ResultDesc: 'Success',
+        ResultDesc: result.duplicate ? 'Already processed' : 'Success',
       });
     } catch (error) {
       logger.error('Error processing M-Pesa callback:', error);
@@ -415,3 +421,11 @@ if (process.env.NODE_ENV !== 'production') {
     return successResponse(res, { message: 'Test callback processed' });
   }));
 }
+/**
+ * GET /mpesa/callback-metrics
+ * Get callback processing performance metrics
+ */
+mpesaRouter.get('/callback-metrics', requireAuth, asyncHandler(async (req, res) => {
+  const metrics = getCallbackMetrics();
+  return successResponse(res, metrics);
+}));
