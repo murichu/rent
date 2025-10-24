@@ -10,11 +10,17 @@
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "seed": "node prisma/seed.js",
-    "test": "jest --runInBand",
+    "test": "NODE_ENV=test jest --runInBand --detectOpenHandles",
+    "test:watch": "NODE_ENV=test jest --runInBand --watch",
+    "test:coverage": "NODE_ENV=test jest --runInBand --coverage",
+    "test:unit": "NODE_ENV=test jest --runInBand --testPathPattern=unit",
+    "test:integration": "NODE_ENV=test jest --runInBand --testPathPattern=integration",
     "test:performance": "node src/tests/performance/runPerformanceTests.js",
     "test:load": "artillery run src/tests/performance/load-test.yml",
     "test:stress": "node src/tests/performance/stressTest.js",
-    "benchmark": "node src/tests/performance/benchmark.js"
+    "benchmark": "node src/tests/performance/benchmark.js",
+    "lint": "eslint src --ext .js",
+    "lint:fix": "eslint src --ext .js --fix"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0",

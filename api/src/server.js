@@ -1,9 +1,10 @@
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
-import morgan from "morgan";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
+import config from "./config/environment.js";
+import { responseWrapper } from "./utils/responses.js";
+import morgan from "morgan";
 import { authRouter } from "./routes/auth.js";
 import { propertyRouter } from "./routes/properties.js";
 import { tenantRouter } from "./routes/tenants.js";
@@ -26,6 +27,9 @@ import cacheManager from "./services/cacheManager.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { enhancedApiLimiter, authLimiter, adminBypass } from "./middleware/rateLimiter.js";
 import { sessionMiddleware, loadSessionMiddleware } from "./middleware/session.js";
+import { requestLogger, errorLogger } from "./utils/logger.js";
+import { apiVersioning, formatResponse } from "./middleware/apiVersioning.js";
+import cacheInvalidationService from "./services/cacheInvalidation.js";
 import { circuitBreakerRouter } from "./routes/circuitBreaker.js";
 import { testCircuitBreakerRouter } from "./routes/testCircuitBreaker.js";
 import { loadBalancerRouter } from "./routes/loadBalancer.js";
@@ -35,10 +39,10 @@ import { loadBalancerService } from "./services/loadBalancerService.js";
 import logger, { morganStream } from "./utils/logger.js";
 import { initializeCronJobs } from "./jobs/cronJobs.js";
 
-dotenv.config();
+// Environment configuration is now handled in config/environment.js
 
 // Initialize cron jobs for automated tasks
-if (process.env.ENABLE_CRON_JOBS !== 'false') {
+if (config.features.cronJobs) {
   initializeCronJobs();
 }
 
@@ -49,7 +53,7 @@ cacheManager.initialize().catch(error => {
 
 // Initialize memory monitoring
 import memoryOptimizer from "./services/memoryOptimizer.js";
-if (process.env.ENABLE_MEMORY_MONITORING !== 'false') {
+if (config.features.memoryMonitoring) {
   memoryOptimizer.startMonitoring(60000); // Monitor every minute
   logger.info('Memory monitoring initialized');
 }
@@ -76,8 +80,8 @@ app.use(helmet({
 
 // Logging middleware with Winston
 app.use(morgan(
-  process.env.NODE_ENV === "production" 
-    ? "combined" 
+  process.env.NODE_ENV === "production"
+    ? "combined"
     : "dev",
   { stream: morganStream }
 ));
@@ -91,10 +95,9 @@ app.use('/api/', enhancedApiLimiter);
 app.use(adminBypass);
 
 // CORS with more restrictive settings
-const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || ["http://localhost:5173", "http://localhost:3000"];
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin || config.corsOrigins.includes(origin)) {
       callback(null, true);
     } else {
       callback(new Error("Not allowed by CORS"));
@@ -103,9 +106,19 @@ app.use(cors({
   credentials: true
 }));
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
+
+// Add response wrapper middleware
+app.use(responseWrapper);
+
+// Add request logging middleware
+app.use(requestLogger);
+
+// Add API versioning middleware
+app.use('/api', apiVersioning);
+app.use('/api', formatResponse);
 
 // Performance monitoring middleware
 app.use(performanceMiddleware);
@@ -126,16 +139,16 @@ app.get("/health", async (_req, res) => {
   try {
     const { healthCheck } = await import("./services/healthCheck.js");
     const liveness = healthCheck.isAlive();
-    res.json({ 
-      success: true, 
-      status: 'OK', 
+    res.json({
+      success: true,
+      status: 'OK',
       timestamp: new Date().toISOString(),
       ...liveness
     });
   } catch (error) {
-    res.status(500).json({ 
-      success: false, 
-      status: 'ERROR', 
+    res.status(500).json({
+      success: false,
+      status: 'ERROR',
       timestamp: new Date().toISOString(),
       error: error.message
     });
@@ -147,10 +160,10 @@ app.get("/health/detailed", async (_req, res) => {
   try {
     const { healthCheck } = await import("./services/healthCheck.js");
     const healthStatus = await healthCheck.performHealthCheck();
-    
-    const statusCode = healthStatus.status === 'healthy' ? 200 : 
-                      healthStatus.status === 'warning' ? 200 : 503;
-    
+
+    const statusCode = healthStatus.status === 'healthy' ? 200 :
+      healthStatus.status === 'warning' ? 200 : 503;
+
     res.status(statusCode).json(healthStatus);
   } catch (error) {
     res.status(503).json({
@@ -166,7 +179,7 @@ app.get("/ready", async (_req, res) => {
   try {
     const { healthCheck } = await import("./services/healthCheck.js");
     const readiness = await healthCheck.isReady();
-    
+
     // Add load balancer specific headers
     res.set({
       'X-Health-Check': 'readiness',
@@ -174,7 +187,7 @@ app.get("/ready", async (_req, res) => {
       'X-Instance-Id': process.env.INSTANCE_ID || process.pid.toString(),
       'Cache-Control': 'no-cache, no-store, must-revalidate'
     });
-    
+
     res.status(readiness.ready ? 200 : 503).json({
       ...readiness,
       instanceId: process.env.INSTANCE_ID || process.pid.toString(),
@@ -202,7 +215,7 @@ app.get("/alive", (_req, res) => {
       'X-Instance-Id': process.env.INSTANCE_ID || process.pid.toString(),
       'Cache-Control': 'no-cache, no-store, must-revalidate'
     });
-    
+
     res.json({
       alive: true,
       timestamp: new Date().toISOString(),
@@ -255,6 +268,26 @@ v1Router.use("/uploads", uploadRouter);
 v1Router.use("/circuit-breakers", circuitBreakerRouter);
 v1Router.use("/test-circuit-breaker", testCircuitBreakerRouter);
 v1Router.use("/load-balancer", loadBalancerRouter);
+// Settings router
+import { settingsRouter } from "./routes/settings.js";
+v1Router.use("/settings", settingsRouter);
+
+// Agent management router
+import { agentRouter } from "./routes/agents.js";
+v1Router.use("/agents", agentRouter);
+
+// Agent authentication router
+import { agentAuthRouter } from "./routes/agentAuth.js";
+v1Router.use("/agent-auth", agentAuthRouter);
+
+// Caretaker management router
+import { caretakerRouter } from "./routes/caretakers.js";
+v1Router.use("/caretakers", caretakerRouter);
+
+// Messaging router
+import { messagingRouter } from "./routes/messaging.js";
+v1Router.use("/messages", messagingRouter);
+
 // TODO: Add these routers when implemented
 // v1Router.use("/2fa", twoFactorRouter);
 // v1Router.use("/mpesa", mpesaRouter);
@@ -291,10 +324,13 @@ app.use((req, res) => {
 // Performance error tracking (before global error handler)
 app.use(errorTrackingMiddleware);
 
+// Error logging middleware
+app.use(errorLogger);
+
 // Global error handler (must be last)
 app.use(errorHandler);
 
-const port = process.env.PORT ? Number(process.env.PORT) : 4000;
+const port = config.PORT;
 app.listen(port, () => {
   logger.info(`🚀 API listening on port ${port}`);
   logger.info(`📝 Environment: ${process.env.NODE_ENV || "development"}`);

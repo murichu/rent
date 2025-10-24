@@ -79,16 +79,132 @@ const logger = winston.createLogger({
 });
 
 /**
+ * Enhanced logging methods with context
+ */
+
+// Generate correlation ID for request tracking
+function generateCorrelationId() {
+  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+/**
  * Audit logger for sensitive operations
  */
 export function auditLog(action, userId, details = {}) {
-  logger.info('AUDIT', {
+  logger.warn('AUDIT', {
     action,
     userId,
     timestamp: new Date().toISOString(),
+    type: 'audit',
     ...details,
   });
 }
+
+/**
+ * Security event logger
+ */
+export function securityLog(event, details = {}) {
+  logger.error('SECURITY_EVENT', {
+    event,
+    details,
+    timestamp: new Date().toISOString(),
+    type: 'security',
+    severity: 'high'
+  });
+}
+
+/**
+ * Performance logger
+ */
+export function performanceLog(operation, duration, details = {}) {
+  logger.info('PERFORMANCE', {
+    operation,
+    duration: `${duration}ms`,
+    details,
+    timestamp: new Date().toISOString(),
+    type: 'performance'
+  });
+}
+
+/**
+ * Business event logger
+ */
+export function businessLog(event, data = {}) {
+  logger.info('BUSINESS_EVENT', {
+    event,
+    data,
+    timestamp: new Date().toISOString(),
+    type: 'business'
+  });
+}
+
+/**
+ * Request logging middleware
+ */
+export const requestLogger = (req, res, next) => {
+  const correlationId = req.headers['x-correlation-id'] || generateCorrelationId();
+  req.correlationId = correlationId;
+  
+  // Add correlation ID to response headers
+  res.setHeader('X-Correlation-ID', correlationId);
+  
+  // Log request start
+  logger.info('Request started', {
+    method: req.method,
+    url: req.url,
+    userAgent: req.get('User-Agent'),
+    ip: req.ip,
+    correlationId,
+    type: 'request_start'
+  });
+  
+  // Capture response time
+  const startTime = Date.now();
+  
+  // Log response end
+  const originalSend = res.send;
+  res.send = function(data) {
+    const duration = Date.now() - startTime;
+    
+    logger.info('Request completed', {
+      method: req.method,
+      url: req.url,
+      statusCode: res.statusCode,
+      duration: `${duration}ms`,
+      correlationId,
+      type: 'request_end'
+    });
+    
+    // Log slow requests
+    if (duration > 1000) {
+      performanceLog('slow_request', duration, {
+        method: req.method,
+        url: req.url,
+        correlationId
+      });
+    }
+    
+    return originalSend.call(this, data);
+  };
+  
+  next();
+};
+
+/**
+ * Error logging middleware
+ */
+export const errorLogger = (error, req, res, next) => {
+  logger.error('Request error', {
+    error: error.message,
+    stack: error.stack,
+    method: req.method,
+    url: req.url,
+    correlationId: req.correlationId,
+    type: 'request_error'
+  });
+  
+  next(error);
+};
 
 /**
  * Morgan stream for HTTP logs

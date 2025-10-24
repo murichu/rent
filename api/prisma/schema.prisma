@@ -33,6 +33,22 @@ model Agency {
   mpesaB2CTransactions MpesaB2CTransaction[]
   mpesaReversals MpesaReversal[]
   kcbTransactions KcbTransaction[]
+  maintenanceRequests MaintenanceRequest[]
+  communicationTemplates CommunicationTemplate[]
+  caretakers Caretaker[]
+  agents Agent[]
+  viewingAppointments ViewingAppointment[]
+  inspections Inspection[]
+  expenses Expense[]
+  cardTransactions CardTransaction[]
+  pesapalTransactions PesapalTransaction[]
+  caretakerPayments CaretakerPayment[]
+  agentCommissionPayments AgentCommissionPayment[]
+  messages Message[]
+  messageTemplates MessageTemplate[]
+  communicationPreferences CommunicationPreference[]
+  channelConfiguration ChannelConfiguration?
+  settings AgencySettings?
 }
 
 model User {
@@ -51,11 +67,19 @@ model User {
   verificationTokens VerificationToken[]
   passwordResetTokens PasswordResetToken[]
   twoFactorSecret TwoFactorSecret?
+  settings UserSettings?
+  settings UserSettings?
 }
 
 enum Role {
   ADMIN
   USER
+}
+
+enum AgentRole {
+  AGENT
+  SENIOR_AGENT
+  AGENT_MANAGER
 }
 
 enum PropertyType {
@@ -102,12 +126,16 @@ model Property {
   systemFeeConfig SystemFeeConfig?
   settings   PropertySettings?
 
-  @@index([city])
-  @@index([status])
-  @@index([agencyId])
-  @@index([status, agencyId])
-  @@index([city, status])
-  @@index([type, status])
+  // Enhanced indexing for better query performance
+  @@index([agencyId, status]) // Primary compound index for agency filtering
+  @@index([city, status, type]) // Location and type filtering
+  @@index([rentAmount, status]) // Price range queries
+  @@index([bedrooms, status]) // Bedroom filtering
+  @@index([type, agencyId]) // Property type by agency
+  @@index([createdAt]) // Sorting by creation date
+  @@index([updatedAt]) // Recently updated properties
+  @@index([title]) // Text search optimization
+  @@index([status, rentAmount]) // Available properties by price
 }
 
 model Tenant {
@@ -124,11 +152,15 @@ model Tenant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([email])
-  @@index([phone])
-  @@index([agencyId])
-  @@index([email, agencyId])
-  @@index([phone, agencyId])
+  // Enhanced indexing for tenant queries
+  @@index([agencyId, isHighRisk]) // High-risk tenant filtering
+  @@index([email, agencyId]) // Email lookup by agency
+  @@index([phone, agencyId]) // Phone lookup by agency
+  @@index([name, agencyId]) // Name search by agency
+  @@index([averageRating, agencyId]) // Rating-based queries
+  @@index([createdAt, agencyId]) // Recent tenants by agency
+  @@unique([email, agencyId]) // Prevent duplicate emails per agency
+  @@unique([phone, agencyId]) // Prevent duplicate phones per agency
 }
 
 model Lease {
@@ -158,6 +190,8 @@ model Lease {
   agentLeases        AgentLease[]
   securityDeposit    SecurityDeposit?
   pesapalTransactions PesapalTransaction[]
+  rentReminders      RentReminder[]
+  maintenanceRequests MaintenanceRequest[]
 }
 
 enum UnitStatus {
@@ -187,6 +221,8 @@ model Unit {
 enum PaymentMethod {
   MPESA_C2B
   MANUAL
+  BANK_TRANSFER
+  CASH
 }
 
 model Invoice {
@@ -239,12 +275,223 @@ model Payment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([paidAt])
-  @@index([leaseId])
-  @@index([agencyId])
+  // Enhanced indexing for payment queries and reporting
+  @@index([agencyId, paidAt]) // Primary agency payment timeline
+  @@index([leaseId, paidAt]) // Lease payment history
+  @@index([method, agencyId]) // Payment method analytics
+  @@index([paidAt, amount]) // Payment amount analysis
+  @@index([invoiceId]) // Invoice payment lookup
+  @@index([referenceNumber]) // Reference number lookup
+  @@index([agencyId, method, paidAt]) // Comprehensive payment analytics
+  @@index([createdAt]) // Payment creation timeline
+}
+
+// Caretaker Payment Management
+model CaretakerPayment {
+  id                String        @id @default(auto()) @map("_id") @db.ObjectId
+  caretakerId       String        @db.ObjectId
+  caretaker         Caretaker     @relation(fields: [caretakerId], references: [id])
+  agencyId          String        @db.ObjectId
+  agency            Agency        @relation(fields: [agencyId], references: [id])
+  amount            Int           // Total amount in cents
+  paymentDate       DateTime      // When payment was made
+  paymentPeriod     String        // e.g., "2024-01", "January 2024"
+  paymentType       String        @default("SALARY") // SALARY, COMMISSION, MIXED
+  salaryAmount      Int?          // Salary portion in cents
+  commissionAmount  Int?          // Commission portion in cents
+  rentCollected     Int?          // Total rent collected for commission calculation
+  commissionRate    Float?        // Commission rate used for calculation
+  method            PaymentMethod @default(MANUAL)
+  referenceNumber   String?       // Transaction reference
+  description       String?       // Payment description/notes
+  status            String        @default("COMPLETED") // PENDING, COMPLETED, FAILED
+  paidBy            String?       // User ID who made the payment
+  receiptUrl        String?       // URL to payment receipt
+  properties        String[]      @default([]) @db.ObjectId // Properties this payment covers
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([caretakerId, paymentDate])
+  @@index([agencyId, paymentDate])
+  @@index([status])
   @@index([method])
-  @@index([paidAt, leaseId])
-  @@index([agencyId, paidAt])
+  @@index([paymentPeriod])
+  @@unique([caretakerId, paymentPeriod]) // Prevent duplicate payments for same period
+}
+
+// Agent Commission Payment Management
+model AgentCommissionPayment {
+  id                String        @id @default(auto()) @map("_id") @db.ObjectId
+  agentId           String        @db.ObjectId
+  agent             Agent         @relation(fields: [agentId], references: [id])
+  agencyId          String        @db.ObjectId
+  agency            Agency        @relation(fields: [agencyId], references: [id])
+  amount            Int           // Total commission amount in cents
+  paymentDate       DateTime      // When payment was made
+  paymentPeriod     String        // e.g., "2024-01", "January 2024"
+  rentCollected     Int           // Total rent collected for commission calculation
+  commissionRate    Float         // Commission rate used for calculation
+  method            PaymentMethod @default(MANUAL)
+  referenceNumber   String?       // Transaction reference
+  description       String?       // Payment description/notes
+  status            String        @default("COMPLETED") // PENDING, COMPLETED, FAILED
+  paidBy            String?       // User ID who made the payment
+  receiptUrl        String?       // URL to payment receipt
+  leaseIds          String[]      @default([]) @db.ObjectId // Leases this commission covers
+  properties        String[]      @default([]) @db.ObjectId // Properties this commission covers
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([agentId, paymentDate])
+  @@index([agencyId, paymentDate])
+  @@index([status])
+  @@index([method])
+  @@index([paymentPeriod])
+  @@unique([agentId, paymentPeriod]) // Prevent duplicate payments for same period
+}
+
+// Messaging System Models
+model Message {
+  id              String        @id @default(auto()) @map("_id") @db.ObjectId
+  agencyId        String        @db.ObjectId
+  agency          Agency        @relation(fields: [agencyId], references: [id])
+  senderId        String        // User ID or Agent ID who sent the message
+  senderType      String        // USER, AGENT
+  senderName      String        // Name of sender for display
+  recipientType   String        // TENANT, AGENT, USER, BULK
+  recipientIds    String[]      @default([]) @db.ObjectId // Tenant/Agent/User IDs
+  subject         String?       // Message subject (for email)
+  content         String        // Message content
+  messageType     String        @default("GENERAL") // GENERAL, RENT_REMINDER, MAINTENANCE, URGENT, NOTICE
+  priority        String        @default("NORMAL") // LOW, NORMAL, HIGH, URGENT
+  channels        String[]      @default(["email"]) // email, sms, whatsapp
+  status          String        @default("PENDING") // PENDING, SENT, DELIVERED, FAILED, PARTIAL
+  scheduledAt     DateTime?     // For scheduled messages
+  sentAt          DateTime?     // When message was actually sent
+  deliveryStatus  Json?         // Channel-specific delivery status
+  templateId      String?       @db.ObjectId // Reference to message template
+  template        MessageTemplate? @relation(fields: [templateId], references: [id])
+  properties      String[]      @default([]) @db.ObjectId // Properties related to message
+  leases          String[]      @default([]) @db.ObjectId // Leases related to message
+  metadata        Json?         // Additional message metadata
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([agencyId, createdAt])
+  @@index([senderId, senderType])
+  @@index([recipientType])
+  @@index([messageType])
+  @@index([status])
+  @@index([scheduledAt])
+  @@index([agencyId, messageType, createdAt])
+}
+
+model MessageTemplate {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  agencyId    String    @db.ObjectId
+  agency      Agency    @relation(fields: [agencyId], references: [id])
+  name        String    // Template name
+  category    String    // RENT_REMINDER, PAYMENT_CONFIRMATION, MAINTENANCE, WELCOME, NOTICE, GENERAL
+  subject     String?   // Email subject template
+  content     String    // Message content template with variables
+  channels    String[]  @default(["email"]) // Supported channels
+  variables   String[]  @default([]) // Available variables like {tenantName}, {amount}, etc.
+  isActive    Boolean   @default(true)
+  isDefault   Boolean   @default(false)
+  createdBy   String?   // User/Agent ID who created template
+  messages    Message[] // Messages using this template
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([agencyId])
+  @@index([category])
+  @@index([isActive])
+  @@unique([agencyId, name])
+}
+
+model MessageRecipient {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  messageId       String    @db.ObjectId
+  recipientId     String    @db.ObjectId // Tenant/Agent/User ID
+  recipientType   String    // TENANT, AGENT, USER
+  recipientName   String    // Name for display
+  recipientPhone  String?   // Phone number
+  recipientEmail  String?   // Email address
+  channels        String[]  @default([]) // Channels used for this recipient
+  deliveryStatus  Json      @default("{}") // Channel-specific delivery status
+  sentAt          DateTime?
+  deliveredAt     DateTime?
+  readAt          DateTime?
+  failureReason   String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([messageId])
+  @@index([recipientId, recipientType])
+  @@index([sentAt])
+}
+
+// Communication Preferences for Recipients
+model CommunicationPreference {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  agencyId        String    @db.ObjectId
+  agency          Agency    @relation(fields: [agencyId], references: [id])
+  recipientId     String    @db.ObjectId // Tenant/Agent/User ID
+  recipientType   String    // TENANT, AGENT, USER
+  preferredChannels String[] @default(["email"]) // Preferred communication channels
+  emailEnabled    Boolean   @default(true)
+  smsEnabled      Boolean   @default(true)
+  whatsappEnabled Boolean   @default(false)
+  emailAddress    String?   // Override email address
+  phoneNumber     String?   // Override phone number
+  whatsappNumber  String?   // Override WhatsApp number
+  quietHours      Json?     // Quiet hours configuration
+  messageTypes    Json?     // Preferences per message type
+  language        String    @default("en") // Preferred language
+  timezone        String    @default("Africa/Nairobi")
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([agencyId])
+  @@index([recipientId, recipientType])
+  @@unique([agencyId, recipientId, recipientType])
+}
+
+// Channel Configuration for Agency
+model ChannelConfiguration {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  agencyId        String    @unique @db.ObjectId
+  agency          Agency    @relation(fields: [agencyId], references: [id])
+  
+  // Email Configuration
+  emailEnabled    Boolean   @default(true)
+  emailProvider   String?   // SENDGRID, AWS_SES, SMTP
+  emailConfig     Json?     // Provider-specific configuration
+  emailFromName   String?
+  emailFromAddress String?
+  
+  // SMS Configuration
+  smsEnabled      Boolean   @default(false)
+  smsProvider     String?   // TWILIO, AFRICASTALKING, CUSTOM
+  smsConfig       Json?     // Provider-specific configuration
+  smsFromNumber   String?
+  
+  // WhatsApp Configuration
+  whatsappEnabled Boolean   @default(false)
+  whatsappProvider String?  // META, TWILIO, CUSTOM
+  whatsappConfig  Json?     // Provider-specific configuration
+  whatsappFromNumber String?
+  
+  // General Settings
+  defaultChannels String[]  @default(["email"])
+  maxRetries      Int       @default(3)
+  retryDelay      Int       @default(300) // seconds
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([agencyId])
 }
 
 enum ManagerRole {
@@ -542,8 +789,13 @@ model Caretaker {
   agencyId      String    @db.ObjectId
   agency        Agency    @relation(fields: [agencyId], references: [id])
   properties    PropertyCaretaker[]
-  commissionRate Float    @default(0) // Percentage or flat amount
+  payments      CaretakerPayment[]
+  paymentType   String    @default("SALARY") // SALARY, COMMISSION, MIXED
+  salaryAmount  Int?      // Monthly salary in cents
+  commissionRate Float    @default(0) // Percentage of rent collected
+  commissionType String   @default("PERCENTAGE") // PERCENTAGE, FLAT_RATE
   rating        Float     @default(0)
+  totalEarned   Float     @default(0) // Total amount earned to date
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }
@@ -608,15 +860,25 @@ model Agent {
   name            String
   phone           String
   email           String?
+  passwordHash    String?   // For agent authentication
+  role            AgentRole @default(AGENT)
+  permissions     String[]  @default([]) // Array of permission strings
+  isActive        Boolean   @default(true)
+  lastLoginAt     DateTime?
   agencyId        String    @db.ObjectId
   agency          Agency    @relation(fields: [agencyId], references: [id])
   commissionRate  Float     @default(100) // Percentage (100 = one month rent)
   totalEarned     Float     @default(0)
   rating          Float     @default(0)
   leases          AgentLease[]
+  commissionPayments AgentCommissionPayment[]
   settings        AgentSettings?
+  assignedProperties String[] @default([]) @db.ObjectId // Properties agent can access
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+
+  @@unique([phone, agencyId]) // Unique phone per agency
+  @@unique([email, agencyId]) // Unique email per agency
 }
 
 model AgentLease {
@@ -800,4 +1062,328 @@ model CallbackLog {
   @@index([transactionRef])
   @@index([processed])
   @@index([type])
+}
+
+// Rent Reminders Tracking
+model RentReminder {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  leaseId       String    @db.ObjectId
+  lease         Lease     @relation(fields: [leaseId], references: [id])
+  reminderType  String    // UPCOMING, DUE, OVERDUE, FINAL_NOTICE
+  channels      Json      // {email: {success: true/false, error: null}, sms: {...}, whatsapp: {...}}
+  sentAt        DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+
+  @@index([leaseId])
+  @@index([reminderType])
+  @@index([sentAt])
+  @@index([leaseId, reminderType])
+}
+
+// Maintenance Requests
+model MaintenanceRequest {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  leaseId       String    @db.ObjectId
+  lease         Lease     @relation(fields: [leaseId], references: [id])
+  agencyId      String    @db.ObjectId
+  agency        Agency    @relation(fields: [agencyId], references: [id])
+  title         String
+  description   String
+  category      String    // PLUMBING, ELECTRICAL, HVAC, APPLIANCE, STRUCTURAL, OTHER
+  priority      String    @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  status        String    @default("SUBMITTED") // SUBMITTED, ACKNOWLEDGED, SCHEDULED, IN_PROGRESS, COMPLETED, CANCELLED
+  submittedBy   String    // TENANT, LANDLORD, MANAGER
+  assignedTo    String?   // Technician or contractor name
+  scheduledDate DateTime?
+  completedDate DateTime?
+  estimatedCost Int?
+  actualCost    Int?
+  photos        String[]  @default([]) // Photo URLs
+  notes         String?
+  tenantRating  Int?      // 1-5 rating from tenant
+  tenantFeedback String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([leaseId])
+  @@index([agencyId])
+  @@index([status])
+  @@index([priority])
+  @@index([category])
+  @@index([scheduledDate])
+  @@index([agencyId, status])
+}
+
+// Communication Templates
+model CommunicationTemplate {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  agencyId    String    @db.ObjectId
+  agency      Agency    @relation(fields: [agencyId], references: [id])
+  name        String
+  type        String    // EMAIL, SMS, WHATSAPP
+  category    String    // RENT_REMINDER, PAYMENT_CONFIRMATION, MAINTENANCE, WELCOME, etc.
+  subject     String?   // For email templates
+  content     String    // Template content with variables
+  variables   String[]  @default([]) // Available variables like {tenantName}, {amount}, etc.
+  isActive    Boolean   @default(true)
+  isDefault   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([agencyId])
+  @@index([type])
+  @@index([category])
+  @@index([agencyId, type, category])
+  @@unique([agencyId, name])
+}
+
+// User Preferences and Settings
+model UserSettings {
+  id                    String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId                String    @unique @db.ObjectId
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // UI Preferences
+  theme                 String    @default("system") // light, dark, system
+  language              String    @default("en") // en, sw, fr, etc.
+  timezone              String    @default("Africa/Nairobi")
+  dateFormat            String    @default("DD/MM/YYYY")
+  timeFormat            String    @default("24h") // 12h, 24h
+  currency              String    @default("KES")
+  
+  // Dashboard Preferences
+  dashboardLayout       String    @default("default") // default, compact, detailed
+  defaultView           String    @default("dashboard") // dashboard, properties, tenants
+  itemsPerPage          Int       @default(10)
+  showWelcomeMessage    Boolean   @default(true)
+  
+  // Notification Preferences
+  emailNotifications    Boolean   @default(true)
+  smsNotifications      Boolean   @default(false)
+  whatsappNotifications Boolean   @default(false)
+  pushNotifications     Boolean   @default(true)
+  
+  // Notification Types
+  rentReminders         Boolean   @default(true)
+  paymentConfirmations  Boolean   @default(true)
+  maintenanceUpdates    Boolean   @default(true)
+  leaseExpirations      Boolean   @default(true)
+  systemAlerts          Boolean   @default(true)
+  
+  // Communication Preferences
+  preferredContactMethod String   @default("email") // email, sms, whatsapp
+  contactPhone          String?
+  contactEmail          String?
+  
+  // Privacy Settings
+  shareDataForAnalytics Boolean   @default(false)
+  allowMarketingEmails  Boolean   @default(false)
+  twoFactorEnabled      Boolean   @default(false)
+  
+  // Advanced Settings
+  autoLogoutMinutes     Int       @default(60)
+  sessionTimeout        Int       @default(1440) // 24 hours in minutes
+  
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+// Agency Settings
+model AgencySettings {
+  id                    String    @id @default(auto()) @map("_id") @db.ObjectId
+  agencyId              String    @unique @db.ObjectId
+  agency                Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  
+  // Business Information
+  businessName          String?
+  businessAddress       String?
+  businessPhone         String?
+  businessEmail         String?
+  businessLicense       String?
+  taxId                 String?
+  
+  // Rent Collection Settings
+  defaultRentDueDay     Int       @default(5)
+  latePaymentGraceDays  Int       @default(3)
+  latePaymentFeeAmount  Int       @default(500) // in cents
+  latePaymentFeeType    String    @default("FLAT") // FLAT, PERCENTAGE
+  
+  // Reminder Settings
+  enableRentReminders   Boolean   @default(true)
+  reminderDaysBefore    Int       @default(3)
+  reminderChannels      String[]  @default(["email"]) // email, sms, whatsapp
+  maxReminderAttempts   Int       @default(3)
+  
+  // Maintenance Settings
+  enableMaintenanceRequests Boolean @default(true)
+  maintenanceResponseTime   Int     @default(24) // hours
+  allowTenantPhotos         Boolean @default(true)
+  requireMaintenanceApproval Boolean @default(false)
+  
+  // Financial Settings
+  currency              String    @default("KES")
+  taxRate               Float     @default(0.0)
+  securityDepositMonths Int       @default(1)
+  
+  // Communication Settings
+  defaultEmailSender    String?
+  smsProvider           String    @default("africastalking")
+  whatsappProvider      String    @default("meta")
+  
+  // Branding
+  logoUrl               String?
+  primaryColor          String    @default("#2563eb")
+  secondaryColor        String    @default("#64748b")
+  
+  // Legal Settings
+  termsOfServiceUrl     String?
+  privacyPolicyUrl      String?
+  
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([agencyId])
+}
+
+// System Configuration (Global Settings)
+model SystemConfig {
+  id                    String    @id @default(auto()) @map("_id") @db.ObjectId
+  key                   String    @unique
+  value                 String
+  description           String?
+  category              String    @default("general") // general, security, features, integrations
+  dataType              String    @default("string") // string, number, boolean, json
+  isPublic              Boolean   @default(false) // Can be accessed by frontend
+  isEditable            Boolean   @default(true)
+  
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([category])
+  @@index([isPublic])
+}
+
+// User Settings and Preferences
+model UserSettings {
+  id                    String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId                String    @unique @db.ObjectId
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // UI Preferences
+  theme                 String    @default("system") // light, dark, system
+  language              String    @default("en") // en, sw, fr, etc.
+  timezone              String    @default("Africa/Nairobi")
+  dateFormat            String    @default("DD/MM/YYYY")
+  timeFormat            String    @default("24h") // 12h, 24h
+  currency              String    @default("KES")
+  
+  // Notification Preferences
+  emailNotifications    Boolean   @default(true)
+  smsNotifications      Boolean   @default(true)
+  whatsappNotifications Boolean   @default(true)
+  pushNotifications     Boolean   @default(true)
+  
+  // Notification Types
+  rentReminders         Boolean   @default(true)
+  paymentConfirmations  Boolean   @default(true)
+  maintenanceUpdates    Boolean   @default(true)
+  leaseExpirations      Boolean   @default(true)
+  systemAlerts          Boolean   @default(true)
+  marketingEmails       Boolean   @default(false)
+  
+  // Dashboard Preferences
+  defaultDashboardView  String    @default("overview") // overview, properties, tenants, payments
+  showWelcomeTour       Boolean   @default(true)
+  compactMode           Boolean   @default(false)
+  showQuickActions      Boolean   @default(true)
+  
+  // Privacy Settings
+  profileVisibility     String    @default("agency") // public, agency, private
+  shareAnalytics        Boolean   @default(true)
+  allowCookies          Boolean   @default(true)
+  
+  // Security Settings
+  twoFactorEnabled      Boolean   @default(false)
+  sessionTimeout        Int       @default(30) // minutes
+  loginAlerts           Boolean   @default(true)
+  
+  // Communication Preferences
+  preferredContactMethod String   @default("email") // email, sms, whatsapp
+  communicationHours    Json      @default("{\"start\": \"08:00\", \"end\": \"18:00\", \"timezone\": \"Africa/Nairobi\"}")
+  weekendCommunication  Boolean   @default(false)
+  
+  // Advanced Settings
+  autoSaveInterval      Int       @default(30) // seconds
+  dataRetentionPeriod   Int       @default(365) // days
+  exportFormat          String    @default("xlsx") // xlsx, csv, pdf
+  
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+// Agency Settings and Configuration
+model AgencySettings {
+  id                    String    @id @default(auto()) @map("_id") @db.ObjectId
+  agencyId              String    @unique @db.ObjectId
+  agency                Agency    @relation(fields: [agencyId], references: [id], onDelete: Cascade)
+  
+  // Business Information
+  businessName          String?
+  businessAddress       String?
+  businessPhone         String?
+  businessEmail         String?
+  businessWebsite       String?
+  businessLogo          String?   // URL to logo image
+  
+  // Rent Collection Settings
+  defaultRentDueDay     Int       @default(5)
+  latePaymentGracePeriod Int      @default(3) // days
+  latePaymentFee        Int       @default(500) // in cents
+  latePaymentFeeType    String    @default("flat") // flat, percentage
+  
+  // Reminder Settings
+  enableRentReminders   Boolean   @default(true)
+  reminderDaysBefore    Int[]     @default([7, 3, 1]) // days before due date
+  reminderDaysAfter     Int[]     @default([1, 3, 7, 14]) // days after due date
+  finalNoticeDay        Int       @default(15) // days after due date
+  
+  // Communication Settings
+  defaultEmailSender    String?
+  defaultSMSSender      String?
+  communicationChannels Json      @default("{\"email\": true, \"sms\": true, \"whatsapp\": false}")
+  
+  // Maintenance Settings
+  maintenanceCategories String[]  @default(["Plumbing", "Electrical", "HVAC", "Appliance", "Structural", "Other"])
+  maintenancePriorities String[]  @default(["Low", "Medium", "High", "Urgent"])
+  autoAssignMaintenance Boolean   @default(false)
+  
+  // Financial Settings
+  defaultCurrency       String    @default("KES")
+  taxRate               Float     @default(0.0) // percentage
+  includeVATInRent      Boolean   @default(false)
+  
+  // Security Settings
+  requireTwoFactor      Boolean   @default(false)
+  passwordPolicy        Json      @default("{\"minLength\": 8, \"requireUppercase\": true, \"requireNumbers\": true, \"requireSymbols\": false}")
+  sessionTimeout        Int       @default(60) // minutes
+  
+  // Integration Settings
+  mpesaEnabled          Boolean   @default(false)
+  pesapalEnabled        Boolean   @default(false)
+  kcbEnabled            Boolean   @default(false)
+  whatsappEnabled       Boolean   @default(false)
+  
+  // Backup and Data Settings
+  autoBackupEnabled     Boolean   @default(true)
+  backupFrequency       String    @default("weekly") // daily, weekly, monthly
+  dataRetentionYears    Int       @default(7)
+  
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([agencyId])
 }

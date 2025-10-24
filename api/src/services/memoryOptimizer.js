@@ -1,40 +1,59 @@
-import logger from "../utils/logger.js";
-import { performance } from "perf_hooks";
+import logger from '../utils/logger.js';
+import { performanceMetrics } from './performanceMetrics.js';
 
 /**
- * Memory and Resource Optimization Service
- * Provides memory monitoring, garbage collection optimization, and memory leak detection
+ * Memory Optimizer Service
+ * Monitors memory usage and implements optimization strategies
  */
-
 class MemoryOptimizer {
   constructor() {
-    this.memoryStats = [];
-    this.gcStats = [];
-    this.monitoringInterval = null;
-    this.memoryThreshold = 0.8; // 80% memory usage threshold
-    this.gcThreshold = 0.9; // 90% memory usage triggers GC
-    this.maxStatsHistory = 1000; // Keep last 1000 memory readings
     this.isMonitoring = false;
+    this.monitoringInterval = null;
+    this.memoryThresholds = {
+      warning: 0.7,  // 70% of heap limit
+      critical: 0.85, // 85% of heap limit
+      emergency: 0.95 // 95% of heap limit
+    };
+    this.gcStats = {
+      lastGC: null,
+      gcCount: 0,
+      totalGCTime: 0
+    };
+    this.memoryHistory = [];
+    this.maxHistorySize = 1000; // Keep last 1000 memory readings
+    
+    // Bind methods
+    this.handleMemoryPressure = this.handleMemoryPressure.bind(this);
+    this.performGarbageCollection = this.performGarbageCollection.bind(this);
   }
 
   /**
-   * Start memory monitoring with configurable interval
+   * Start memory monitoring
    */
-  startMonitoring(intervalMs = 60000) { // Default: 1 minute
+  startMonitoring(interval = 60000) { // Default 1 minute
     if (this.isMonitoring) {
       logger.warn('Memory monitoring already started');
       return;
     }
 
-    this.isMonitoring = true;
-    logger.info('Starting memory monitoring', { intervalMs });
-
     this.monitoringInterval = setInterval(() => {
-      this.collectMemoryStats();
-    }, intervalMs);
+      this.checkMemoryUsage();
+    }, interval);
 
-    // Initial collection
-    this.collectMemoryStats();
+    this.isMonitoring = true;
+    logger.info('Memory monitoring started', { interval });
+
+    // Set up process memory warnings if available
+    if (process.memoryUsage.rss) {
+      process.on('warning', (warning) => {
+        if (warning.name === 'MaxListenersExceededWarning') {
+          logger.warn('Memory warning detected', {
+            name: warning.name,
+            message: warning.message
+          });
+        }
+      });
+    }
   }
 
   /**
@@ -44,311 +63,399 @@ class MemoryOptimizer {
     if (this.monitoringInterval) {
       clearInterval(this.monitoringInterval);
       this.monitoringInterval = null;
-      this.isMonitoring = false;
-      logger.info('Memory monitoring stopped');
     }
+    this.isMonitoring = false;
+    logger.info('Memory monitoring stopped');
   }
 
   /**
-   * Collect current memory statistics
+   * Check current memory usage and take action if needed
    */
-  collectMemoryStats() {
-    const memUsage = process.memoryUsage();
-    const timestamp = new Date();
+  checkMemoryUsage() {
+    const memoryUsage = process.memoryUsage();
+    const heapUsed = memoryUsage.heapUsed;
+    const heapTotal = memoryUsage.heapTotal;
+    const rss = memoryUsage.rss;
+    const external = memoryUsage.external;
+
+    // Calculate heap usage percentage
+    const heapUsagePercent = heapUsed / heapTotal;
     
-    const stats = {
-      timestamp,
-      rss: memUsage.rss, // Resident Set Size
-      heapTotal: memUsage.heapTotal,
-      heapUsed: memUsage.heapUsed,
-      external: memUsage.external,
-      arrayBuffers: memUsage.arrayBuffers,
-      heapUtilization: memUsage.heapUsed / memUsage.heapTotal,
-      rssUtilization: memUsage.rss / (1024 * 1024 * 1024), // Convert to GB
-      uptime: process.uptime()
+    // Store memory history
+    const memorySnapshot = {
+      timestamp: new Date(),
+      heapUsed,
+      heapTotal,
+      rss,
+      external,
+      heapUsagePercent,
+      arrayBuffers: memoryUsage.arrayBuffers || 0
     };
 
-    // Add to history
-    this.memoryStats.push(stats);
+    this.memoryHistory.push(memorySnapshot);
     
-    // Keep only recent stats
-    if (this.memoryStats.length > this.maxStatsHistory) {
-      this.memoryStats = this.memoryStats.slice(-this.maxStatsHistory);
+    // Keep history size manageable
+    if (this.memoryHistory.length > this.maxHistorySize) {
+      this.memoryHistory.shift();
     }
 
-    // Check for memory issues
-    this.checkMemoryThresholds(stats);
-    
-    // Log memory stats periodically
-    if (this.memoryStats.length % 10 === 0) { // Every 10 minutes with 1-minute intervals
-      logger.info('Memory usage stats', {
-        heapUsed: `${Math.round(stats.heapUsed / 1024 / 1024)}MB`,
-        heapTotal: `${Math.round(stats.heapTotal / 1024 / 1024)}MB`,
-        rss: `${Math.round(stats.rss / 1024 / 1024)}MB`,
-        heapUtilization: `${Math.round(stats.heapUtilization * 100)}%`,
-        uptime: `${Math.round(stats.uptime / 3600)}h`
-      });
+    // Record metrics
+    performanceMetrics.recordMemoryUsage({
+      endpoint: 'system',
+      memoryUsage,
+      memoryDelta: this.calculateMemoryDelta(),
+      timestamp: new Date()
+    });
+
+    // Check thresholds and take action
+    if (heapUsagePercent >= this.memoryThresholds.emergency) {
+      this.handleMemoryPressure('emergency', memorySnapshot);
+    } else if (heapUsagePercent >= this.memoryThresholds.critical) {
+      this.handleMemoryPressure('critical', memorySnapshot);
+    } else if (heapUsagePercent >= this.memoryThresholds.warning) {
+      this.handleMemoryPressure('warning', memorySnapshot);
     }
 
-    return stats;
-  }
-
-  /**
-   * Check memory thresholds and trigger actions
-   */
-  checkMemoryThresholds(stats) {
-    // High memory usage warning
-    if (stats.heapUtilization > this.memoryThreshold) {
-      logger.warn('High memory usage detected', {
-        heapUtilization: `${Math.round(stats.heapUtilization * 100)}%`,
-        heapUsed: `${Math.round(stats.heapUsed / 1024 / 1024)}MB`,
-        threshold: `${Math.round(this.memoryThreshold * 100)}%`
-      });
-    }
-
-    // Critical memory usage - trigger garbage collection
-    if (stats.heapUtilization > this.gcThreshold) {
-      logger.error('Critical memory usage - triggering garbage collection', {
-        heapUtilization: `${Math.round(stats.heapUtilization * 100)}%`,
-        heapUsed: `${Math.round(stats.heapUsed / 1024 / 1024)}MB`
-      });
-      
-      this.forceGarbageCollection();
+    // Log memory stats periodically (every 10 checks)
+    if (this.memoryHistory.length % 10 === 0) {
+      this.logMemoryStats(memorySnapshot);
     }
   }
 
   /**
-   * Force garbage collection if available
+   * Handle memory pressure situations
    */
-  forceGarbageCollection() {
-    if (global.gc) {
-      const beforeGC = process.memoryUsage();
-      const startTime = performance.now();
-      
-      global.gc();
-      
-      const afterGC = process.memoryUsage();
-      const duration = performance.now() - startTime;
-      
-      const gcStats = {
-        timestamp: new Date(),
-        duration,
-        beforeHeapUsed: beforeGC.heapUsed,
-        afterHeapUsed: afterGC.heapUsed,
-        memoryFreed: beforeGC.heapUsed - afterGC.heapUsed,
-        heapReduction: ((beforeGC.heapUsed - afterGC.heapUsed) / beforeGC.heapUsed) * 100
-      };
-      
-      this.gcStats.push(gcStats);
-      
-      // Keep only recent GC stats
-      if (this.gcStats.length > 100) {
-        this.gcStats = this.gcStats.slice(-100);
-      }
-      
-      logger.info('Garbage collection completed', {
-        duration: `${Math.round(duration)}ms`,
-        memoryFreed: `${Math.round(gcStats.memoryFreed / 1024 / 1024)}MB`,
-        heapReduction: `${Math.round(gcStats.heapReduction)}%`
-      });
-      
-      return gcStats;
-    } else {
-      logger.warn('Garbage collection not available - start Node.js with --expose-gc flag');
-      return null;
-    }
-  }
-
-  /**
-   * Detect potential memory leaks
-   */
-  detectMemoryLeaks() {
-    if (this.memoryStats.length < 10) {
-      return { hasLeak: false, message: 'Insufficient data for leak detection' };
-    }
-
-    const recent = this.memoryStats.slice(-10);
-    const older = this.memoryStats.slice(-20, -10);
+  handleMemoryPressure(level, memorySnapshot) {
+    const { heapUsed, heapTotal, rss, heapUsagePercent } = memorySnapshot;
     
-    if (older.length === 0) {
-      return { hasLeak: false, message: 'Insufficient historical data' };
-    }
+    logger.warn(`Memory pressure detected: ${level}`, {
+      level,
+      heapUsed: Math.round(heapUsed / 1024 / 1024) + 'MB',
+      heapTotal: Math.round(heapTotal / 1024 / 1024) + 'MB',
+      rss: Math.round(rss / 1024 / 1024) + 'MB',
+      heapUsagePercent: (heapUsagePercent * 100).toFixed(2) + '%'
+    });
 
-    const recentAvg = recent.reduce((sum, stat) => sum + stat.heapUsed, 0) / recent.length;
-    const olderAvg = older.reduce((sum, stat) => sum + stat.heapUsed, 0) / older.length;
-    
-    const growthRate = (recentAvg - olderAvg) / olderAvg;
-    const isGrowing = growthRate > 0.1; // 10% growth threshold
-    
-    // Check for consistent growth pattern
-    let consistentGrowth = true;
-    for (let i = 1; i < recent.length; i++) {
-      if (recent[i].heapUsed < recent[i - 1].heapUsed) {
-        consistentGrowth = false;
+    switch (level) {
+      case 'warning':
+        // Light cleanup
+        this.performLightCleanup();
         break;
+        
+      case 'critical':
+        // Aggressive cleanup
+        this.performAggressiveCleanup();
+        this.performGarbageCollection();
+        break;
+        
+      case 'emergency':
+        // Emergency measures
+        this.performEmergencyCleanup();
+        this.performGarbageCollection();
+        this.alertAdministrators(memorySnapshot);
+        break;
+    }
+  }
+
+  /**
+   * Perform light memory cleanup
+   */
+  performLightCleanup() {
+    try {
+      // Clear old performance metrics
+      if (performanceMetrics.reset) {
+        // Only clear if we have too much data
+        const memoryUsage = process.memoryUsage();
+        if (memoryUsage.heapUsed > 200 * 1024 * 1024) { // 200MB
+          performanceMetrics.reset();
+          logger.info('Performance metrics cleared for memory optimization');
+        }
       }
+
+      // Clear old memory history
+      if (this.memoryHistory.length > this.maxHistorySize / 2) {
+        this.memoryHistory = this.memoryHistory.slice(-this.maxHistorySize / 2);
+        logger.info('Memory history trimmed');
+      }
+
+    } catch (error) {
+      logger.error('Light cleanup failed:', error);
+    }
+  }
+
+  /**
+   * Perform aggressive memory cleanup
+   */
+  performAggressiveCleanup() {
+    try {
+      // Clear more data
+      this.performLightCleanup();
+      
+      // Clear Node.js internal caches if possible
+      if (require.cache) {
+        // Don't clear core modules, just clear some cached modules
+        const cacheKeys = Object.keys(require.cache);
+        const clearableModules = cacheKeys.filter(key => 
+          key.includes('node_modules') && 
+          !key.includes('express') && 
+          !key.includes('prisma')
+        );
+        
+        // Clear up to 10% of clearable modules
+        const toClear = clearableModules.slice(0, Math.floor(clearableModules.length * 0.1));
+        toClear.forEach(key => {
+          delete require.cache[key];
+        });
+        
+        if (toClear.length > 0) {
+          logger.info(`Cleared ${toClear.length} cached modules`);
+        }
+      }
+
+    } catch (error) {
+      logger.error('Aggressive cleanup failed:', error);
+    }
+  }
+
+  /**
+   * Perform emergency memory cleanup
+   */
+  performEmergencyCleanup() {
+    try {
+      this.performAggressiveCleanup();
+      
+      // Clear all non-essential memory history
+      this.memoryHistory = this.memoryHistory.slice(-100); // Keep only last 100 entries
+      
+      // Force garbage collection multiple times
+      for (let i = 0; i < 3; i++) {
+        this.performGarbageCollection();
+      }
+
+      logger.warn('Emergency memory cleanup performed');
+
+    } catch (error) {
+      logger.error('Emergency cleanup failed:', error);
+    }
+  }
+
+  /**
+   * Perform garbage collection if available
+   */
+  performGarbageCollection() {
+    if (global.gc) {
+      const startTime = Date.now();
+      
+      try {
+        global.gc();
+        
+        const gcTime = Date.now() - startTime;
+        this.gcStats.lastGC = new Date();
+        this.gcStats.gcCount++;
+        this.gcStats.totalGCTime += gcTime;
+        
+        logger.info('Garbage collection performed', {
+          gcTime: gcTime + 'ms',
+          totalGCs: this.gcStats.gcCount
+        });
+        
+      } catch (error) {
+        logger.error('Garbage collection failed:', error);
+      }
+    } else {
+      logger.warn('Garbage collection not available (run with --expose-gc flag)');
+    }
+  }
+
+  /**
+   * Calculate memory delta from previous reading
+   */
+  calculateMemoryDelta() {
+    if (this.memoryHistory.length < 2) {
+      return {
+        rss: 0,
+        heapUsed: 0,
+        heapTotal: 0,
+        external: 0
+      };
     }
 
-    const hasLeak = isGrowing && consistentGrowth && growthRate > 0.2; // 20% growth with consistent pattern
-    
-    const result = {
-      hasLeak,
-      growthRate: Math.round(growthRate * 100),
-      recentAverage: Math.round(recentAvg / 1024 / 1024),
-      olderAverage: Math.round(olderAvg / 1024 / 1024),
-      consistentGrowth,
-      message: hasLeak 
-        ? `Potential memory leak detected: ${Math.round(growthRate * 100)}% growth rate`
-        : 'No memory leak detected'
-    };
-
-    if (hasLeak) {
-      logger.error('Memory leak detected', result);
-    }
-
-    return result;
-  }
-
-  /**
-   * Get current memory statistics
-   */
-  getCurrentStats() {
-    return this.collectMemoryStats();
-  }
-
-  /**
-   * Get memory usage history
-   */
-  getMemoryHistory(limit = 100) {
-    return this.memoryStats.slice(-limit);
-  }
-
-  /**
-   * Get garbage collection history
-   */
-  getGCHistory(limit = 50) {
-    return this.gcStats.slice(-limit);
-  }
-
-  /**
-   * Generate memory usage report
-   */
-  generateMemoryReport() {
-    const current = this.getCurrentStats();
-    const leakDetection = this.detectMemoryLeaks();
-    const history = this.getMemoryHistory(60); // Last hour with 1-minute intervals
-    
-    const avgHeapUsage = history.length > 0 
-      ? history.reduce((sum, stat) => sum + stat.heapUsed, 0) / history.length
-      : current.heapUsed;
-    
-    const maxHeapUsage = history.length > 0
-      ? Math.max(...history.map(stat => stat.heapUsed))
-      : current.heapUsed;
-    
-    const minHeapUsage = history.length > 0
-      ? Math.min(...history.map(stat => stat.heapUsed))
-      : current.heapUsed;
+    const current = this.memoryHistory[this.memoryHistory.length - 1];
+    const previous = this.memoryHistory[this.memoryHistory.length - 2];
 
     return {
-      timestamp: new Date(),
-      current: {
-        heapUsed: Math.round(current.heapUsed / 1024 / 1024),
-        heapTotal: Math.round(current.heapTotal / 1024 / 1024),
-        rss: Math.round(current.rss / 1024 / 1024),
-        heapUtilization: Math.round(current.heapUtilization * 100),
-        uptime: Math.round(current.uptime / 3600)
-      },
-      statistics: {
-        averageHeapUsage: Math.round(avgHeapUsage / 1024 / 1024),
-        maxHeapUsage: Math.round(maxHeapUsage / 1024 / 1024),
-        minHeapUsage: Math.round(minHeapUsage / 1024 / 1024),
-        dataPoints: history.length
-      },
-      leakDetection,
-      garbageCollection: {
-        totalCollections: this.gcStats.length,
-        recentCollections: this.gcStats.slice(-10),
-        averageDuration: this.gcStats.length > 0
-          ? Math.round(this.gcStats.reduce((sum, gc) => sum + gc.duration, 0) / this.gcStats.length)
+      rss: current.rss - previous.rss,
+      heapUsed: current.heapUsed - previous.heapUsed,
+      heapTotal: current.heapTotal - previous.heapTotal,
+      external: current.external - previous.external
+    };
+  }
+
+  /**
+   * Get memory statistics
+   */
+  getMemoryStats() {
+    const currentMemory = process.memoryUsage();
+    const recentHistory = this.memoryHistory.slice(-60); // Last 60 readings
+    
+    if (recentHistory.length === 0) {
+      return {
+        current: currentMemory,
+        trend: 'unknown',
+        gcStats: this.gcStats
+      };
+    }
+
+    // Calculate trends
+    const heapUsedTrend = this.calculateTrend(recentHistory.map(h => h.heapUsed));
+    const rssTrend = this.calculateTrend(recentHistory.map(h => h.rss));
+
+    return {
+      current: currentMemory,
+      history: {
+        samples: recentHistory.length,
+        timespan: recentHistory.length > 1 
+          ? recentHistory[recentHistory.length - 1].timestamp - recentHistory[0].timestamp
           : 0
       },
-      recommendations: this.generateRecommendations(current, leakDetection)
+      trends: {
+        heapUsed: heapUsedTrend,
+        rss: rssTrend
+      },
+      thresholds: this.memoryThresholds,
+      gcStats: this.gcStats,
+      isMonitoring: this.isMonitoring
     };
   }
 
   /**
-   * Generate optimization recommendations
+   * Calculate trend direction
    */
-  generateRecommendations(current, leakDetection) {
-    const recommendations = [];
+  calculateTrend(values) {
+    if (values.length < 2) return 'stable';
     
-    if (current.heapUtilization > 0.8) {
-      recommendations.push('High memory usage detected - consider optimizing queries or implementing result streaming');
+    const first = values[0];
+    const last = values[values.length - 1];
+    const change = (last - first) / first;
+    
+    if (change > 0.1) return 'increasing';
+    if (change < -0.1) return 'decreasing';
+    return 'stable';
+  }
+
+  /**
+   * Log memory statistics
+   */
+  logMemoryStats(memorySnapshot) {
+    const { heapUsed, heapTotal, rss, external, heapUsagePercent } = memorySnapshot;
+    
+    logger.info('Memory statistics', {
+      heapUsed: Math.round(heapUsed / 1024 / 1024) + 'MB',
+      heapTotal: Math.round(heapTotal / 1024 / 1024) + 'MB',
+      rss: Math.round(rss / 1024 / 1024) + 'MB',
+      external: Math.round(external / 1024 / 1024) + 'MB',
+      heapUsagePercent: (heapUsagePercent * 100).toFixed(2) + '%',
+      gcCount: this.gcStats.gcCount,
+      lastGC: this.gcStats.lastGC
+    });
+  }
+
+  /**
+   * Alert administrators about memory issues
+   */
+  alertAdministrators(memorySnapshot) {
+    // TODO: Implement email/SMS alerts for administrators
+    logger.error('CRITICAL: Memory usage at emergency levels', {
+      heapUsed: Math.round(memorySnapshot.heapUsed / 1024 / 1024) + 'MB',
+      heapTotal: Math.round(memorySnapshot.heapTotal / 1024 / 1024) + 'MB',
+      heapUsagePercent: (memorySnapshot.heapUsagePercent * 100).toFixed(2) + '%',
+      timestamp: memorySnapshot.timestamp.toISOString()
+    });
+  }
+
+  /**
+   * Detect memory leaks
+   */
+  detectMemoryLeaks() {
+    if (this.memoryHistory.length < 100) {
+      return { hasLeak: false, confidence: 0 };
     }
+
+    const recent = this.memoryHistory.slice(-100);
+    const heapUsedValues = recent.map(h => h.heapUsed);
     
-    if (leakDetection.hasLeak) {
-      recommendations.push('Potential memory leak detected - review recent code changes and check for unclosed resources');
-    }
-    
-    if (this.gcStats.length > 0) {
-      const recentGC = this.gcStats.slice(-5);
-      const avgDuration = recentGC.reduce((sum, gc) => sum + gc.duration, 0) / recentGC.length;
-      
-      if (avgDuration > 100) {
-        recommendations.push('Garbage collection taking too long - consider reducing object creation or optimizing data structures');
+    // Check for consistent upward trend
+    let increasingCount = 0;
+    for (let i = 1; i < heapUsedValues.length; i++) {
+      if (heapUsedValues[i] > heapUsedValues[i - 1]) {
+        increasingCount++;
       }
     }
+
+    const increasingPercentage = increasingCount / (heapUsedValues.length - 1);
+    const hasLeak = increasingPercentage > 0.8; // 80% of readings show increase
     
-    if (current.uptime > 86400 && current.heapUtilization > 0.7) { // 24 hours uptime
-      recommendations.push('Long-running process with high memory usage - consider periodic restarts or memory cleanup');
-    }
-    
-    if (recommendations.length === 0) {
-      recommendations.push('Memory usage is within normal parameters');
-    }
-    
-    return recommendations;
+    return {
+      hasLeak,
+      confidence: increasingPercentage,
+      trend: this.calculateTrend(heapUsedValues),
+      recommendation: hasLeak 
+        ? 'Potential memory leak detected. Consider restarting the application.'
+        : 'Memory usage appears normal.'
+    };
   }
 
   /**
-   * Optimize memory usage by cleaning up old data
+   * Get memory optimization recommendations
    */
-  optimizeMemory() {
-    const beforeOptimization = process.memoryUsage();
+  getOptimizationRecommendations() {
+    const stats = this.getMemoryStats();
+    const leakDetection = this.detectMemoryLeaks();
+    const recommendations = [];
+
+    // Check current usage
+    const currentUsagePercent = stats.current.heapUsed / stats.current.heapTotal;
     
-    // Clear old statistics
-    if (this.memoryStats.length > this.maxStatsHistory / 2) {
-      this.memoryStats = this.memoryStats.slice(-this.maxStatsHistory / 2);
+    if (currentUsagePercent > 0.8) {
+      recommendations.push({
+        priority: 'high',
+        action: 'Immediate garbage collection needed',
+        description: 'Memory usage is above 80% of heap limit'
+      });
     }
-    
-    if (this.gcStats.length > 50) {
-      this.gcStats = this.gcStats.slice(-50);
+
+    if (stats.trends.heapUsed === 'increasing') {
+      recommendations.push({
+        priority: 'medium',
+        action: 'Monitor memory growth',
+        description: 'Heap usage is consistently increasing'
+      });
     }
-    
-    // Force garbage collection if available
-    const gcResult = this.forceGarbageCollection();
-    
-    const afterOptimization = process.memoryUsage();
-    
-    const optimization = {
-      timestamp: new Date(),
-      beforeHeapUsed: beforeOptimization.heapUsed,
-      afterHeapUsed: afterOptimization.heapUsed,
-      memoryFreed: beforeOptimization.heapUsed - afterOptimization.heapUsed,
-      gcTriggered: gcResult !== null
+
+    if (leakDetection.hasLeak) {
+      recommendations.push({
+        priority: 'critical',
+        action: 'Investigate memory leak',
+        description: `Potential memory leak detected (${(leakDetection.confidence * 100).toFixed(1)}% confidence)`
+      });
+    }
+
+    if (stats.gcStats.gcCount === 0) {
+      recommendations.push({
+        priority: 'low',
+        action: 'Enable garbage collection',
+        description: 'Run application with --expose-gc flag for better memory management'
+      });
+    }
+
+    return {
+      recommendations,
+      leakDetection,
+      currentStats: stats
     };
-    
-    logger.info('Memory optimization completed', {
-      memoryFreed: `${Math.round(optimization.memoryFreed / 1024 / 1024)}MB`,
-      gcTriggered: optimization.gcTriggered
-    });
-    
-    return optimization;
   }
 }
 
-// Create singleton instance
+// Export singleton instance
 const memoryOptimizer = new MemoryOptimizer();
-
 export default memoryOptimizer;

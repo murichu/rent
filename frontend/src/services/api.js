@@ -147,6 +147,19 @@ const api = {
     getOccupancyData: (params) => apiClient.get('/dashboard/occupancy', { params }),
   },
 
+  // Settings
+  settings: {
+    getPreferences: () => apiClient.get('/settings/preferences'),
+    getUserSettings: () => apiClient.get('/settings/user'),
+    updateUserSettings: (data) => apiClient.put('/settings/user', data),
+    getAgencySettings: () => apiClient.get('/settings/agency'),
+    updateAgencySettings: (data) => apiClient.put('/settings/agency', data),
+    getSystemConfig: () => apiClient.get('/settings/system'),
+    resetUserSettings: () => apiClient.post('/settings/reset-user'),
+    exportSettings: () => apiClient.get('/settings/export'),
+    importSettings: (data) => apiClient.post('/settings/import', data),
+  },
+
   // Agencies
   agencies: {
     getMe: () => apiClient.get('/agencies/me'),

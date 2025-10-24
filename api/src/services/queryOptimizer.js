@@ -1,550 +1,529 @@
-import { prisma } from "../db.js";
-import logger from "../utils/logger.js";
-import queryResultOptimizer from "./queryResultOptimizer.js";
+import { prisma } from '../db.js';
+import logger from '../utils/logger.js';
+import cacheService from './cache.js';
 
 /**
- * Query optimization service with pagination, includes, and performance monitoring
+ * Enhanced Query Optimizer Service
+ * Provides optimized database queries with caching and performance monitoring
  */
 
-// Default pagination settings
-const DEFAULT_PAGE_SIZE = 50;
-const MAX_PAGE_SIZE = 100;
-
-/**
- * Parse pagination parameters from request query with memory optimization
- */
-export const parsePagination = (query) => {
-  // Validate and sanitize query parameters
-  const sanitizedQuery = queryResultOptimizer.validateQueryParams(query);
-  
-  const page = Math.max(1, parseInt(sanitizedQuery.page) || 1);
-  let limit = Math.min(MAX_PAGE_SIZE, Math.max(1, parseInt(sanitizedQuery.limit) || DEFAULT_PAGE_SIZE));
-  
-  // Apply memory-based limit optimization
-  limit = queryResultOptimizer.getMemoryOptimizedLimit(limit, DEFAULT_PAGE_SIZE);
-  
-  const skip = (page - 1) * limit;
-  
-  return { page, limit, skip };
-};
-
-/**
- * Optimized property queries with proper includes and pagination
- */
-export const getPropertiesOptimized = async (agencyId, options = {}) => {
-  const { page, limit, skip } = parsePagination(options);
-  const { includeUnits = false, includeLeases = false, status } = options;
-  
-  const where = { agencyId };
-  if (status) where.status = status;
-  
-  const include = {};
-  if (includeUnits) {
-    include.units = {
-      select: {
-        id: true,
-        unitNumber: true,
-        status: true,
-        rentAmount: true,
-        type: true
-      }
-    };
+class QueryOptimizer {
+  constructor() {
+    this.queryStats = new Map();
+    this.slowQueryThreshold = 1000; // 1 second
+    this.cacheEnabled = true;
   }
-  if (includeLeases) {
-    include.leases = {
-      where: { endDate: null }, // Only active leases
-      select: {
-        id: true,
-        startDate: true,
-        rentAmount: true,
-        tenant: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true
-          }
+
+  /**
+   * Record query performance metrics
+   */
+  recordQuery(queryName, duration, cached = false) {
+    if (!this.queryStats.has(queryName)) {
+      this.queryStats.set(queryName, {
+        count: 0,
+        totalDuration: 0,
+        avgDuration: 0,
+        slowQueries: 0,
+        cacheHits: 0,
+        cacheMisses: 0,
+      });
+    }
+
+    const stats = this.queryStats.get(queryName);
+    stats.count++;
+    
+    if (cached) {
+      stats.cacheHits++;
+    } else {
+      stats.cacheMisses++;
+      stats.totalDuration += duration;
+      stats.avgDuration = stats.totalDuration / (stats.count - stats.cacheHits);
+      
+      if (duration > this.slowQueryThreshold) {
+        stats.slowQueries++;
+        logger.warn(`Slow query detected: ${queryName}`, {
+          duration: `${duration}ms`,
+          threshold: `${this.slowQueryThreshold}ms`,
+        });
+      }
+    }
+  }
+
+  /**
+   * Get query performance statistics
+   */
+  getQueryStats() {
+    const stats = {};
+    for (const [queryName, data] of this.queryStats) {
+      stats[queryName] = {
+        ...data,
+        cacheHitRate: data.count > 0 ? ((data.cacheHits / data.count) * 100).toFixed(2) + '%' : '0%',
+        slowQueryRate: data.count > 0 ? ((data.slowQueries / data.count) * 100).toFixed(2) + '%' : '0%',
+      };
+    }
+    return stats;
+  }
+
+  /**
+   * Execute query with caching and performance monitoring
+   */
+  async executeQuery(queryName, queryFn, cacheKey = null, ttl = 300) {
+    const startTime = Date.now();
+    
+    try {
+      // Try cache first if enabled and cache key provided
+      if (this.cacheEnabled && cacheKey) {
+        const cached = await cacheService.get(cacheKey);
+        if (cached) {
+          const duration = Date.now() - startTime;
+          this.recordQuery(queryName, duration, true);
+          return cached;
         }
       }
+
+      // Execute query
+      const result = await queryFn();
+      const duration = Date.now() - startTime;
+      
+      // Cache result if cache key provided
+      if (this.cacheEnabled && cacheKey && result) {
+        await cacheService.set(cacheKey, result, ttl);
+      }
+      
+      this.recordQuery(queryName, duration, false);
+      return result;
+      
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      this.recordQuery(queryName, duration, false);
+      logger.error(`Query error: ${queryName}`, {
+        error: error.message,
+        duration: `${duration}ms`,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Optimized property queries
+   */
+  async getProperties(agencyId, filters = {}, pagination = {}) {
+    const { page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'desc' } = pagination;
+    const { city, type, status, minRent, maxRent, bedrooms, search } = filters;
+    
+    const cacheKey = cacheService.generateKey(
+      cacheService.keyPrefixes.PROPERTIES,
+      `${agencyId}:list`,
+      JSON.stringify({ filters, pagination })
+    );
+
+    return this.executeQuery('getProperties', async () => {
+      const where = { agencyId };
+      
+      // Apply filters
+      if (city) where.city = { contains: city, mode: 'insensitive' };
+      if (type) where.type = type;
+      if (status) where.status = status;
+      if (bedrooms) where.bedrooms = bedrooms;
+      
+      if (minRent || maxRent) {
+        where.rentAmount = {};
+        if (minRent) where.rentAmount.gte = minRent;
+        if (maxRent) where.rentAmount.lte = maxRent;
+      }
+      
+      if (search) {
+        where.OR = [
+          { title: { contains: search, mode: 'insensitive' } },
+          { address: { contains: search, mode: 'insensitive' } },
+          { city: { contains: search, mode: 'insensitive' } },
+        ];
+      }
+
+      const [properties, total] = await Promise.all([
+        prisma.property.findMany({
+          where,
+          include: {
+            units: {
+              select: { id: true, status: true, rentAmount: true }
+            },
+            _count: {
+              select: { leases: true }
+            }
+          },
+          orderBy: { [sortBy]: sortOrder },
+          skip: (page - 1) * limit,
+          take: limit,
+        }),
+        prisma.property.count({ where }),
+      ]);
+
+      return {
+        properties,
+        pagination: {
+          page,
+          limit,
+          total,
+          pages: Math.ceil(total / limit),
+        },
+      };
+    }, cacheKey, 300);
+  }
+
+  /**
+   * Optimized tenant queries
+   */
+  async getTenants(agencyId, filters = {}, pagination = {}) {
+    const { page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'desc' } = pagination;
+    const { search, isHighRisk } = filters;
+    
+    const cacheKey = cacheService.generateKey(
+      cacheService.keyPrefixes.TENANTS,
+      `${agencyId}:list`,
+      JSON.stringify({ filters, pagination })
+    );
+
+    return this.executeQuery('getTenants', async () => {
+      const where = { agencyId };
+      
+      if (isHighRisk !== undefined) where.isHighRisk = isHighRisk;
+      
+      if (search) {
+        where.OR = [
+          { name: { contains: search, mode: 'insensitive' } },
+          { email: { contains: search, mode: 'insensitive' } },
+          { phone: { contains: search, mode: 'insensitive' } },
+        ];
+      }
+
+      const [tenants, total] = await Promise.all([
+        prisma.tenant.findMany({
+          where,
+          include: {
+            leases: {
+              select: {
+                id: true,
+                startDate: true,
+                endDate: true,
+                rentAmount: true,
+                property: {
+                  select: { title: true, address: true }
+                },
+                unit: {
+                  select: { unitNumber: true }
+                }
+              },
+              orderBy: { startDate: 'desc' },
+              take: 1,
+            },
+            _count: {
+              select: { leases: true, vacateNotices: true }
+            }
+          },
+          orderBy: { [sortBy]: sortOrder },
+          skip: (page - 1) * limit,
+          take: limit,
+        }),
+        prisma.tenant.count({ where }),
+      ]);
+
+      return {
+        tenants,
+        pagination: {
+          page,
+          limit,
+          total,
+          pages: Math.ceil(total / limit),
+        },
+      };
+    }, cacheKey, 300);
+  }
+
+  /**
+   * Optimized payment queries with analytics
+   */
+  async getPayments(agencyId, filters = {}, pagination = {}) {
+    const { page = 1, limit = 10, sortBy = 'paidAt', sortOrder = 'desc' } = pagination;
+    const { leaseId, method, startDate, endDate, minAmount, maxAmount } = filters;
+    
+    const cacheKey = cacheService.generateKey(
+      cacheService.keyPrefixes.PAYMENTS,
+      `${agencyId}:list`,
+      JSON.stringify({ filters, pagination })
+    );
+
+    return this.executeQuery('getPayments', async () => {
+      const where = { agencyId };
+      
+      if (leaseId) where.leaseId = leaseId;
+      if (method) where.method = method;
+      
+      if (startDate || endDate) {
+        where.paidAt = {};
+        if (startDate) where.paidAt.gte = new Date(startDate);
+        if (endDate) where.paidAt.lte = new Date(endDate);
+      }
+      
+      if (minAmount || maxAmount) {
+        where.amount = {};
+        if (minAmount) where.amount.gte = minAmount;
+        if (maxAmount) where.amount.lte = maxAmount;
+      }
+
+      const [payments, total, analytics] = await Promise.all([
+        prisma.payment.findMany({
+          where,
+          include: {
+            lease: {
+              select: {
+                id: true,
+                tenant: { select: { name: true, phone: true } },
+                property: { select: { title: true } },
+                unit: { select: { unitNumber: true } }
+              }
+            },
+            invoice: {
+              select: { id: true, amount: true, status: true }
+            }
+          },
+          orderBy: { [sortBy]: sortOrder },
+          skip: (page - 1) * limit,
+          take: limit,
+        }),
+        prisma.payment.count({ where }),
+        this.getPaymentAnalytics(agencyId, filters),
+      ]);
+
+      return {
+        payments,
+        analytics,
+        pagination: {
+          page,
+          limit,
+          total,
+          pages: Math.ceil(total / limit),
+        },
+      };
+    }, cacheKey, 180);
+  }
+
+  /**
+   * Get payment analytics
+   */
+  async getPaymentAnalytics(agencyId, filters = {}) {
+    const where = { agencyId };
+    const { startDate, endDate } = filters;
+    
+    if (startDate || endDate) {
+      where.paidAt = {};
+      if (startDate) where.paidAt.gte = new Date(startDate);
+      if (endDate) where.paidAt.lte = new Date(endDate);
+    }
+
+    const [totalPayments, methodBreakdown, monthlyTrends] = await Promise.all([
+      prisma.payment.aggregate({
+        where,
+        _sum: { amount: true },
+        _count: true,
+        _avg: { amount: true },
+      }),
+      prisma.payment.groupBy({
+        by: ['method'],
+        where,
+        _sum: { amount: true },
+        _count: true,
+      }),
+      prisma.$queryRaw`
+        SELECT 
+          DATE_TRUNC('month', "paidAt") as month,
+          SUM(amount) as total_amount,
+          COUNT(*) as payment_count
+        FROM "Payment" 
+        WHERE "agencyId" = ${agencyId}
+        ${startDate ? `AND "paidAt" >= ${new Date(startDate)}` : ''}
+        ${endDate ? `AND "paidAt" <= ${new Date(endDate)}` : ''}
+        GROUP BY DATE_TRUNC('month', "paidAt")
+        ORDER BY month DESC
+        LIMIT 12
+      `,
+    ]);
+
+    return {
+      totalAmount: totalPayments._sum.amount || 0,
+      totalCount: totalPayments._count || 0,
+      averageAmount: totalPayments._avg.amount || 0,
+      methodBreakdown,
+      monthlyTrends,
     };
   }
-  
-  const startTime = Date.now();
-  const memoryBefore = process.memoryUsage();
-  
-  const [properties, total] = await Promise.all([
-    prisma.property.findMany({
-      where,
-      include,
-      skip,
-      take: limit,
-      orderBy: { createdAt: 'desc' }
-    }),
-    prisma.property.count({ where })
-  ]);
-  
-  const memoryAfter = process.memoryUsage();
-  
-  // Optimize query results for memory and serialization
-  const optimizedProperties = queryResultOptimizer.optimizeQueryResults(properties, {
-    entityType: 'property',
-    selectionLevel: includeUnits || includeLeases ? 'detailed' : 'standard',
-    memoryOptimize: true
-  });
-  
-  // Log performance metrics
-  queryResultOptimizer.logQueryMetrics('getPropertiesOptimized', startTime, properties.length, memoryBefore, memoryAfter);
-  
-  return {
-    data: optimizedProperties,
-    pagination: {
-      page,
-      limit,
-      total,
-      pages: Math.ceil(total / limit),
-      hasNext: page * limit < total,
-      hasPrev: page > 1
-    },
-    meta: {
-      originalCount: properties.length,
-      optimizedCount: optimizedProperties.length,
-      memoryUsage: Math.round(memoryAfter.heapUsed / 1024 / 1024)
-    }
-  };
-};
 
-/**
- * Optimized payment queries with lease and tenant information
- */
-export const getPaymentsOptimized = async (agencyId, options = {}) => {
-  const { page, limit, skip } = parsePagination(options);
-  const { leaseId, startDate, endDate } = options;
-  
-  const where = { agencyId };
-  if (leaseId) where.leaseId = leaseId;
-  if (startDate || endDate) {
-    where.paidAt = {};
-    if (startDate) where.paidAt.gte = new Date(startDate);
-    if (endDate) where.paidAt.lte = new Date(endDate);
+  /**
+   * Optimized dashboard queries
+   */
+  async getDashboardStats(agencyId) {
+    const cacheKey = cacheService.generateKey(
+      cacheService.keyPrefixes.DASHBOARD,
+      agencyId,
+      'stats'
+    );
+
+    return this.executeQuery('getDashboardStats', async () => {
+      const [
+        propertyStats,
+        tenantStats,
+        paymentStats,
+        recentPayments,
+        upcomingRent,
+      ] = await Promise.all([
+        this.getPropertyStats(agencyId),
+        this.getTenantStats(agencyId),
+        this.getPaymentStatsForDashboard(agencyId),
+        this.getRecentPayments(agencyId, 5),
+        this.getUpcomingRentPayments(agencyId, 10),
+      ]);
+
+      return {
+        properties: propertyStats,
+        tenants: tenantStats,
+        payments: paymentStats,
+        recentPayments,
+        upcomingRent,
+        lastUpdated: new Date().toISOString(),
+      };
+    }, cacheKey, 300);
   }
-  
-  const startTime = Date.now();
-  const memoryBefore = process.memoryUsage();
-  
-  const [payments, total] = await Promise.all([
-    prisma.payment.findMany({
-      where,
+
+  async getPropertyStats(agencyId) {
+    return prisma.property.groupBy({
+      by: ['status'],
+      where: { agencyId },
+      _count: true,
+    });
+  }
+
+  async getTenantStats(agencyId) {
+    const [total, highRisk, active] = await Promise.all([
+      prisma.tenant.count({ where: { agencyId } }),
+      prisma.tenant.count({ where: { agencyId, isHighRisk: true } }),
+      prisma.lease.count({
+        where: {
+          agencyId,
+          OR: [
+            { endDate: null },
+            { endDate: { gt: new Date() } }
+          ]
+        }
+      }),
+    ]);
+
+    return { total, highRisk, active };
+  }
+
+  async getPaymentStatsForDashboard(agencyId) {
+    const currentMonth = new Date();
+    currentMonth.setDate(1);
+    currentMonth.setHours(0, 0, 0, 0);
+
+    const [thisMonth, lastMonth] = await Promise.all([
+      prisma.payment.aggregate({
+        where: {
+          agencyId,
+          paidAt: { gte: currentMonth }
+        },
+        _sum: { amount: true },
+        _count: true,
+      }),
+      prisma.payment.aggregate({
+        where: {
+          agencyId,
+          paidAt: {
+            gte: new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1),
+            lt: currentMonth,
+          }
+        },
+        _sum: { amount: true },
+        _count: true,
+      }),
+    ]);
+
+    return {
+      thisMonth: {
+        amount: thisMonth._sum.amount || 0,
+        count: thisMonth._count || 0,
+      },
+      lastMonth: {
+        amount: lastMonth._sum.amount || 0,
+        count: lastMonth._count || 0,
+      },
+    };
+  }
+
+  async getRecentPayments(agencyId, limit = 5) {
+    return prisma.payment.findMany({
+      where: { agencyId },
       include: {
         lease: {
           select: {
-            id: true,
-            property: {
-              select: {
-                id: true,
-                title: true,
-                address: true
-              }
-            },
-            unit: {
-              select: {
-                id: true,
-                unitNumber: true
-              }
-            },
-            tenant: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-                phone: true
-              }
-            }
-          }
-        },
-        invoice: {
-          select: {
-            id: true,
-            amount: true,
-            status: true,
-            dueAt: true
-          }
-        }
-      },
-      skip,
-      take: limit,
-      orderBy: { paidAt: 'desc' }
-    }),
-    prisma.payment.count({ where })
-  ]);
-  
-  const memoryAfter = process.memoryUsage();
-  
-  // Optimize query results for memory and serialization
-  const optimizedPayments = queryResultOptimizer.optimizeQueryResults(payments, {
-    entityType: 'payment',
-    selectionLevel: 'detailed',
-    memoryOptimize: true
-  });
-  
-  // Log performance metrics
-  queryResultOptimizer.logQueryMetrics('getPaymentsOptimized', startTime, payments.length, memoryBefore, memoryAfter);
-  
-  return {
-    data: optimizedPayments,
-    pagination: {
-      page,
-      limit,
-      total,
-      pages: Math.ceil(total / limit),
-      hasNext: page * limit < total,
-      hasPrev: page > 1
-    },
-    meta: {
-      originalCount: payments.length,
-      optimizedCount: optimizedPayments.length,
-      memoryUsage: Math.round(memoryAfter.heapUsed / 1024 / 1024)
-    }
-  };
-};
-
-/**
- * Optimized dashboard data with efficient aggregations
- */
-export const getDashboardDataOptimized = async (agencyId) => {
-  const startTime = Date.now();
-  
-  // Use Promise.all for parallel execution
-  const [
-    propertyCounts,
-    tenantCount,
-    leaseCount,
-    invoiceCounts,
-    recentPayments,
-    overdueInvoices
-  ] = await Promise.all([
-    // Property counts by status
-    prisma.property.groupBy({
-      by: ['status'],
-      where: { agencyId },
-      _count: { id: true }
-    }),
-    
-    // Total tenant count
-    prisma.tenant.count({ where: { agencyId } }),
-    
-    // Active lease count
-    prisma.lease.count({ 
-      where: { 
-        agencyId,
-        endDate: null 
-      } 
-    }),
-    
-    // Invoice counts by status
-    prisma.invoice.groupBy({
-      by: ['status'],
-      where: { agencyId },
-      _count: { id: true },
-      _sum: { amount: true }
-    }),
-    
-    // Recent payments with minimal data
-    prisma.payment.findMany({
-      where: { agencyId },
-      select: {
-        id: true,
-        amount: true,
-        paidAt: true,
-        method: true,
-        lease: {
-          select: {
-            tenant: {
-              select: {
-                name: true
-              }
-            },
-            property: {
-              select: {
-                title: true
-              }
-            }
+            tenant: { select: { name: true } },
+            property: { select: { title: true } },
+            unit: { select: { unitNumber: true } }
           }
         }
       },
       orderBy: { paidAt: 'desc' },
-      take: 10
-    }),
-    
-    // Overdue invoices with minimal data
-    prisma.invoice.findMany({
-      where: { 
-        agencyId, 
-        status: 'OVERDUE',
-        dueAt: { lt: new Date() }
-      },
-      select: {
-        id: true,
-        amount: true,
-        dueAt: true,
-        totalPaid: true,
-        lease: {
-          select: {
-            tenant: {
-              select: {
-                name: true,
-                phone: true
-              }
-            },
-            property: {
-              select: {
-                title: true
-              }
-            }
-          }
-        }
-      },
-      orderBy: { dueAt: 'asc' },
-      take: 20
-    })
-  ]);
-  
-  const duration = Date.now() - startTime;
-  logger.debug('Dashboard query executed', {
-    agencyId,
-    duration: `${duration}ms`
-  });
-  
-  // Process property counts
-  const propertyStats = propertyCounts.reduce((acc, item) => {
-    acc[item.status.toLowerCase()] = item._count.id;
-    return acc;
-  }, {});
-  
-  // Process invoice stats
-  const invoiceStats = invoiceCounts.reduce((acc, item) => {
-    acc[item.status.toLowerCase()] = {
-      count: item._count.id,
-      amount: item._sum.amount || 0
-    };
-    return acc;
-  }, {});
-  
-  return {
-    properties: {
-      total: Object.values(propertyStats).reduce((sum, count) => sum + count, 0),
-      ...propertyStats
-    },
-    tenants: tenantCount,
-    leases: leaseCount,
-    invoices: invoiceStats,
-    recentPayments,
-    overdueInvoices
-  };
-};
-
-/**
- * Optimized tenant queries with lease information
- */
-export const getTenantsOptimized = async (agencyId, options = {}) => {
-  const { page, limit, skip } = parsePagination(options);
-  const { includeLeases = false, search } = options;
-  
-  const where = { agencyId };
-  if (search) {
-    where.OR = [
-      { name: { contains: search, mode: 'insensitive' } },
-      { email: { contains: search, mode: 'insensitive' } },
-      { phone: { contains: search, mode: 'insensitive' } }
-    ];
-  }
-  
-  const include = {};
-  if (includeLeases) {
-    include.leases = {
-      where: { endDate: null }, // Only active leases
-      select: {
-        id: true,
-        startDate: true,
-        rentAmount: true,
-        property: {
-          select: {
-            id: true,
-            title: true,
-            address: true
-          }
-        },
-        unit: {
-          select: {
-            id: true,
-            unitNumber: true
-          }
-        }
-      }
-    };
-  }
-  
-  const startTime = Date.now();
-  const memoryBefore = process.memoryUsage();
-  
-  const [tenants, total] = await Promise.all([
-    prisma.tenant.findMany({
-      where,
-      include,
-      skip,
       take: limit,
-      orderBy: { createdAt: 'desc' }
-    }),
-    prisma.tenant.count({ where })
-  ]);
-  
-  const memoryAfter = process.memoryUsage();
-  
-  // Optimize query results for memory and serialization
-  const optimizedTenants = queryResultOptimizer.optimizeQueryResults(tenants, {
-    entityType: 'tenant',
-    selectionLevel: includeLeases ? 'detailed' : 'standard',
-    memoryOptimize: true
-  });
-  
-  // Log performance metrics
-  queryResultOptimizer.logQueryMetrics('getTenantsOptimized', startTime, tenants.length, memoryBefore, memoryAfter);
-  
-  return {
-    data: optimizedTenants,
-    pagination: {
-      page,
-      limit,
-      total,
-      pages: Math.ceil(total / limit),
-      hasNext: page * limit < total,
-      hasPrev: page > 1
-    },
-    meta: {
-      originalCount: tenants.length,
-      optimizedCount: optimizedTenants.length,
-      memoryUsage: Math.round(memoryAfter.heapUsed / 1024 / 1024)
-    }
-  };
-};
-
-/**
- * Optimized invoice queries with payment information
- */
-export const getInvoicesOptimized = async (agencyId, options = {}) => {
-  const { page, limit, skip } = parsePagination(options);
-  const { status, leaseId, overdue = false } = options;
-  
-  const where = { agencyId };
-  if (status) where.status = status;
-  if (leaseId) where.leaseId = leaseId;
-  if (overdue) {
-    where.status = { in: ['PENDING', 'PARTIAL', 'OVERDUE'] };
-    where.dueAt = { lt: new Date() };
+    });
   }
-  
-  const startTime = Date.now();
-  const memoryBefore = process.memoryUsage();
-  
-  const [invoices, total] = await Promise.all([
-    prisma.invoice.findMany({
-      where,
+
+  async getUpcomingRentPayments(agencyId, limit = 10) {
+    const today = new Date();
+    const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, today.getDate());
+
+    return prisma.lease.findMany({
+      where: {
+        agencyId,
+        OR: [
+          { endDate: null },
+          { endDate: { gt: today } }
+        ]
+      },
       include: {
-        lease: {
-          select: {
-            id: true,
-            tenant: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-                phone: true
-              }
-            },
-            property: {
-              select: {
-                id: true,
-                title: true,
-                address: true
-              }
-            },
-            unit: {
-              select: {
-                id: true,
-                unitNumber: true
-              }
-            }
-          }
-        },
+        tenant: { select: { name: true, phone: true } },
+        property: { select: { title: true } },
+        unit: { select: { unitNumber: true } },
         payments: {
-          select: {
-            id: true,
-            amount: true,
-            paidAt: true,
-            method: true
-          }
+          where: {
+            paidAt: {
+              gte: new Date(today.getFullYear(), today.getMonth(), 1),
+              lt: nextMonth,
+            }
+          },
+          select: { amount: true, paidAt: true }
         }
       },
-      skip,
+      orderBy: { paymentDayOfMonth: 'asc' },
       take: limit,
-      orderBy: { dueAt: 'desc' }
-    }),
-    prisma.invoice.count({ where })
-  ]);
-  
-  const memoryAfter = process.memoryUsage();
-  
-  // Optimize query results for memory and serialization
-  const optimizedInvoices = queryResultOptimizer.optimizeQueryResults(invoices, {
-    entityType: 'invoice',
-    selectionLevel: 'detailed',
-    memoryOptimize: true
-  });
-  
-  // Log performance metrics
-  queryResultOptimizer.logQueryMetrics('getInvoicesOptimized', startTime, invoices.length, memoryBefore, memoryAfter);
-  
-  return {
-    data: optimizedInvoices,
-    pagination: {
-      page,
-      limit,
-      total,
-      pages: Math.ceil(total / limit),
-      hasNext: page * limit < total,
-      hasPrev: page > 1
-    },
-    meta: {
-      originalCount: invoices.length,
-      optimizedCount: optimizedInvoices.length,
-      memoryUsage: Math.round(memoryAfter.heapUsed / 1024 / 1024)
-    }
-  };
-};
+    });
+  }
 
-/**
- * Query execution time middleware
- */
-export const queryTimeMiddleware = (req, res, next) => {
-  req.queryStartTime = Date.now();
-  
-  const originalJson = res.json;
-  res.json = function(data) {
-    const duration = Date.now() - req.queryStartTime;
-    
-    if (duration > 1000) {
-      logger.warn('Slow API response', {
-        method: req.method,
-        url: req.originalUrl,
-        duration: `${duration}ms`,
-        userAgent: req.get('User-Agent')
-      });
-    }
-    
-    // Add performance headers
-    res.set('X-Response-Time', `${duration}ms`);
-    
-    return originalJson.call(this, data);
-  };
-  
-  next();
-};
+  /**
+   * Clear query statistics
+   */
+  clearStats() {
+    this.queryStats.clear();
+    logger.info('Query optimizer statistics cleared');
+  }
+
+  /**
+   * Enable/disable caching
+   */
+  setCacheEnabled(enabled) {
+    this.cacheEnabled = enabled;
+    logger.info(`Query optimizer caching ${enabled ? 'enabled' : 'disabled'}`);
+  }
+}
+
+// Create singleton instance
+const queryOptimizer = new QueryOptimizer();
+
+export default queryOptimizer;
