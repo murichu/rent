@@ -110,103 +110,41 @@ invoiceRouter.put("/:id/status", async (req, res) => {
   res.json(updated);
 });
 
-// GET /invoices/:id/branded - Get branded invoice with agency styling
+// GET /invoices/:id/branded - Get branded invoice with comprehensive styling
 invoiceRouter.get("/:id/branded", async (req, res) => {
   try {
-    const invoice = await prisma.invoice.findFirst({
-      where: { 
-        id: req.params.id, 
-        agencyId: req.user.agencyId 
-      },
-      include: {
-        lease: {
-          include: {
-            tenant: true,
-            property: {
-              select: {
-                title: true,
-                address: true,
-                city: true,
-                state: true,
-                zip: true,
-              },
-            },
-            unit: {
-              select: {
-                unitNumber: true,
-              },
-            },
-          },
-        },
-        agency: {
-          include: {
-            settings: true,
-          },
-        },
-        payments: {
-          orderBy: { paidAt: "desc" },
-        },
-        penalties: true,
-      },
-    });
-
-    if (!invoice) {
-      return res.status(404).json({ error: "Invoice not found" });
-    }
-
-    // Get agency branding
-    const branding = invoice.agency.settings || {};
-
-    // Calculate invoice details
-    const totalPaid = invoice.payments.reduce((sum, payment) => sum + payment.amount, 0);
-    const totalPenalties = invoice.penalties.reduce((sum, penalty) => sum + penalty.amount, 0);
-    const balanceDue = invoice.amount + totalPenalties - totalPaid;
-
-    const brandedInvoice = {
-      ...invoice,
-      branding: {
-        businessName: branding.businessName || invoice.agency.name,
-        businessAddress: branding.businessAddress,
-        businessPhone: branding.businessPhone,
-        businessEmail: branding.businessEmail,
-        businessWebsite: branding.businessWebsite,
-        logoUrl: branding.businessLogo,
-        primaryColor: branding.primaryColor || "#2563eb",
-        secondaryColor: branding.secondaryColor || "#64748b",
-      },
-      calculations: {
-        subtotal: invoice.amount,
-        penalties: totalPenalties,
-        totalAmount: invoice.amount + totalPenalties,
-        totalPaid,
-        balanceDue,
-        isOverdue: new Date() > new Date(invoice.dueAt) && balanceDue > 0,
-      },
-      propertyDetails: {
-        title: invoice.lease.property?.title,
-        address: invoice.lease.property?.address,
-        city: invoice.lease.property?.city,
-        state: invoice.lease.property?.state,
-        zip: invoice.lease.property?.zip,
-        unitNumber: invoice.lease.unit?.unitNumber,
-      },
-      tenantDetails: {
-        name: invoice.lease.tenant?.name,
-        email: invoice.lease.tenant?.email,
-        phone: invoice.lease.tenant?.phone,
-      },
-      paymentHistory: invoice.payments.map(payment => ({
-        id: payment.id,
-        amount: payment.amount,
-        paidAt: payment.paidAt,
-        method: payment.method,
-        referenceNumber: payment.referenceNumber,
-      })),
+    const { usePropertyManagerBranding = 'auto', format = 'json' } = req.query;
+    
+    // Import branding service
+    const { invoiceBrandingService } = await import("../services/invoiceBrandingService.js");
+    
+    const options = {
+      usePropertyManagerBranding: usePropertyManagerBranding === 'false' ? false : 
+                                 usePropertyManagerBranding === 'true' ? true : 
+                                 usePropertyManagerBranding // 'auto' allows service to decide
     };
 
-    res.json(brandedInvoice);
+    const brandedInvoice = await invoiceBrandingService.getInvoiceBranding(req.params.id, options);
+
+    if (format === 'html') {
+      const htmlResult = await invoiceBrandingService.generateBrandedHTML(req.params.id, options);
+      return res.json({
+        format: 'html',
+        html: htmlResult.html,
+        css: htmlResult.css,
+        data: htmlResult.data
+      });
+    }
+
+    res.json({
+      format: 'json',
+      ...brandedInvoice
+    });
   } catch (error) {
     console.error("Error fetching branded invoice:", error);
+    if (error.message === 'Invoice not found') {
+      return res.status(404).json({ error: "Invoice not found" });
+    }
     res.status(500).json({ error: "Failed to fetch branded invoice" });
   }
 });
@@ -307,10 +245,88 @@ ${invoice.agency.settings?.businessName || invoice.agency.name}
   }
 });
 
+// GET /invoices/:id/pdf - Generate branded PDF invoice
+invoiceRouter.get("/:id/pdf", async (req, res) => {
+  try {
+    const { usePropertyManagerBranding = 'auto', download = 'true' } = req.query;
+    
+    // Import branding service
+    const { invoiceBrandingService } = await import("../services/invoiceBrandingService.js");
+    
+    const options = {
+      usePropertyManagerBranding: usePropertyManagerBranding === 'false' ? false : 
+                                 usePropertyManagerBranding === 'true' ? true : 
+                                 usePropertyManagerBranding
+    };
+
+    const pdfBuffer = await invoiceBrandingService.generateBrandedPDF(req.params.id, options);
+    
+    const filename = `invoice-${req.params.id.slice(-8)}-${new Date().toISOString().split('T')[0]}.pdf`;
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    if (download === 'true') {
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    } else {
+      res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    }
+    res.setHeader('Content-Length', pdfBuffer.length);
+    
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error("Error generating PDF invoice:", error);
+    if (error.message === 'Invoice not found') {
+      return res.status(404).json({ error: "Invoice not found" });
+    }
+    res.status(500).json({ error: "Failed to generate PDF invoice" });
+  }
+});
+
+// GET /invoices/:id/preview - Get invoice preview with branding options
+invoiceRouter.get("/:id/preview", async (req, res) => {
+  try {
+    const { usePropertyManagerBranding = 'auto' } = req.query;
+    
+    // Import branding service
+    const { invoiceBrandingService } = await import("../services/invoiceBrandingService.js");
+    
+    const options = {
+      usePropertyManagerBranding: usePropertyManagerBranding === 'false' ? false : 
+                                 usePropertyManagerBranding === 'true' ? true : 
+                                 usePropertyManagerBranding
+    };
+
+    const htmlResult = await invoiceBrandingService.generateBrandedHTML(req.params.id, options);
+    
+    const fullHTML = `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Invoice Preview</title>
+        <style>${htmlResult.css}</style>
+      </head>
+      <body>
+        ${htmlResult.html}
+      </body>
+      </html>
+    `;
+    
+    res.setHeader('Content-Type', 'text/html');
+    res.send(fullHTML);
+  } catch (error) {
+    console.error("Error generating invoice preview:", error);
+    if (error.message === 'Invoice not found') {
+      return res.status(404).json({ error: "Invoice not found" });
+    }
+    res.status(500).json({ error: "Failed to generate invoice preview" });
+  }
+});
+
 // POST /invoices/:id/generate-receipt - Generate receipt for invoice payment
 invoiceRouter.post("/:id/generate-receipt", async (req, res) => {
   try {
-    const { paymentId } = req.body;
+    const { paymentId, usePropertyManagerBranding = 'auto' } = req.body;
 
     const invoice = await prisma.invoice.findFirst({
       where: { 
@@ -322,10 +338,13 @@ invoiceRouter.post("/:id/generate-receipt", async (req, res) => {
           include: {
             tenant: true,
             property: {
-              select: {
-                title: true,
-                address: true,
-              },
+              include: {
+                managers: {
+                  include: {
+                    user: true
+                  }
+                }
+              }
             },
             unit: {
               select: {
@@ -356,26 +375,40 @@ invoiceRouter.post("/:id/generate-receipt", async (req, res) => {
       return res.status(404).json({ error: "No payments found for this invoice" });
     }
 
-    const payment = invoice.payments[0];
-    const branding = invoice.agency.settings || {};
+    // Import branding service for receipt generation
+    const { invoiceBrandingService } = await import("../services/invoiceBrandingService.js");
+    
+    const options = {
+      usePropertyManagerBranding: usePropertyManagerBranding === 'false' ? false : 
+                                 usePropertyManagerBranding === 'true' ? true : 
+                                 usePropertyManagerBranding
+    };
 
-    // Generate receipt
+    const branding = await invoiceBrandingService.buildBrandingHierarchy(invoice, options);
+    const payment = invoice.payments[0];
+
+    // Generate receipt with comprehensive branding
     const receipt = {
       receiptNumber: `RCT-${payment.id.slice(-8).toUpperCase()}`,
-      invoiceNumber: `INV-${invoice.id.slice(-8).toUpperCase()}`,
+      invoiceNumber: `${branding.invoicePrefix || 'INV'}-${invoice.id.slice(-8).toUpperCase()}`,
       paymentId: payment.id,
       invoiceId: invoice.id,
       
-      // Agency branding
+      // Comprehensive branding
       branding: {
-        businessName: branding.businessName || invoice.agency.name,
+        businessName: branding.businessName,
         businessAddress: branding.businessAddress,
         businessPhone: branding.businessPhone,
         businessEmail: branding.businessEmail,
         businessWebsite: branding.businessWebsite,
-        logoUrl: branding.businessLogo,
-        primaryColor: branding.primaryColor || "#2563eb",
-        secondaryColor: branding.secondaryColor || "#64748b",
+        businessLicense: branding.businessLicense,
+        taxId: branding.taxId,
+        logoUrl: branding.logoUrl,
+        primaryColor: branding.primaryColor,
+        secondaryColor: branding.secondaryColor,
+        accentColor: branding.accentColor,
+        brandingSource: branding.brandingSource,
+        propertyManagerInfo: branding.propertyManagerInfo
       },
 
       // Payment details

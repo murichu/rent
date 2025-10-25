@@ -1195,6 +1195,23 @@ model UserSettings {
   autoLogoutMinutes     Int       @default(60)
   sessionTimeout        Int       @default(1440) // 24 hours in minutes
   
+  // Property Manager Branding (for landlords/property managers)
+  enableCustomBranding  Boolean   @default(false)
+  businessName          String?
+  businessAddress       String?
+  businessPhone         String?
+  businessEmail         String?
+  businessLicense       String?
+  taxId                 String?
+  logoUrl               String?
+  primaryColor          String?
+  secondaryColor        String?
+  accentColor           String?
+  invoicePrefix         String?
+  showWatermark         Boolean   @default(false)
+  watermarkText         String?
+  footerText            String?
+  
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
