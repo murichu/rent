@@ -109,7 +109,6 @@ class InvoiceBrandingService {
       businessAddress: propertyManagerBranding?.businessAddress || agencySettings.businessAddress,
       businessPhone: propertyManagerBranding?.businessPhone || agencySettings.businessPhone,
       businessEmail: propertyManagerBranding?.businessEmail || agencySettings.businessEmail,
-      businessWebsite: propertyManagerBranding?.businessWebsite || agencySettings.businessWebsite,
       businessLicense: propertyManagerBranding?.businessLicense || agencySettings.businessLicense,
       taxId: propertyManagerBranding?.taxId || agencySettings.taxId,
 
@@ -162,7 +161,6 @@ class InvoiceBrandingService {
         businessAddress: userSettings.businessAddress,
         businessPhone: userSettings.businessPhone,
         businessEmail: userSettings.businessEmail,
-        businessWebsite: userSettings.businessWebsite,
         businessLicense: userSettings.businessLicense,
         taxId: userSettings.taxId,
         logoUrl: userSettings.logoUrl,
@@ -259,7 +257,6 @@ class InvoiceBrandingService {
           address: branding.businessAddress,
           phone: branding.businessPhone,
           email: branding.businessEmail,
-          website: branding.businessWebsite,
           license: branding.businessLicense,
           taxId: branding.taxId
         },
@@ -433,11 +430,6 @@ class InvoiceBrandingService {
       currentY = doc.y + 3;
     }
 
-    if (header.businessInfo.website) {
-      doc.fillColor(styling.colors.primary)
-        .text(header.businessInfo.website, businessInfoX, currentY, { align: 'right' });
-      currentY = doc.y + 3;
-    }
 
     // Invoice Information (left side, below logo)
     const invoiceInfoY = startY + (header.logoUrl ? 80 : 40);
@@ -744,7 +736,6 @@ class InvoiceBrandingService {
               <div class="contact-info">
                 ${content.header.businessInfo.phone ? `<span class="phone">Phone: ${content.header.businessInfo.phone}</span>` : ''}
                 ${content.header.businessInfo.email ? `<span class="email">Email: ${content.header.businessInfo.email}</span>` : ''}
-                ${content.header.businessInfo.website ? `<span class="website">${content.header.businessInfo.website}</span>` : ''}
               </div>
             </div>
           </div>
@@ -940,9 +931,6 @@ class InvoiceBrandingService {
         font-size: ${styling.fontSizes.body}px;
       }
 
-      .website {
-        color: ${styling.colors.primary};
-      }
 
       .invoice-info {
         text-align: right;

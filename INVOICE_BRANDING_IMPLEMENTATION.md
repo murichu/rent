@@ -48,7 +48,7 @@ I have successfully implemented a comprehensive invoice branding system that all
 ## 🎨 Visual Features
 
 ### Branding Elements:
-- **Business Information**: Name, address, phone, email, website
+- **Business Information**: Name, address, phone, email
 - **Legal Information**: Business license, tax ID
 - **Visual Identity**: Custom logos, color schemes
 - **Invoice Styling**: Custom prefixes, watermarks, footers
@@ -100,7 +100,6 @@ businessName          String
 businessAddress       String
 businessPhone         String
 businessEmail         String
-businessWebsite       String
 businessLicense       String
 taxId                 String
 logoUrl               String

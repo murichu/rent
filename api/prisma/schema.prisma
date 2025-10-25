@@ -1201,7 +1201,6 @@ model UserSettings {
   businessAddress       String?
   businessPhone         String?
   businessEmail         String?
-  businessWebsite       String?
   businessLicense       String?
   taxId                 String?
   logoUrl               String?
