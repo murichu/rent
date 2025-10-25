@@ -49,6 +49,9 @@ model Agency {
   communicationPreferences CommunicationPreference[]
   channelConfiguration ChannelConfiguration?
   settings AgencySettings?
+  customFields CustomField[]
+  invoiceShares InvoiceShare[]
+  paymentReceipts PaymentReceipt[]
 }
 
 model User {
@@ -68,7 +71,8 @@ model User {
   passwordResetTokens PasswordResetToken[]
   twoFactorSecret TwoFactorSecret?
   settings UserSettings?
-  settings UserSettings?
+  invoiceShares InvoiceShare[]
+  paymentReceipts PaymentReceipt[]
 }
 
 enum Role {
@@ -125,6 +129,7 @@ model Property {
   expenses   Expense[]
   systemFeeConfig SystemFeeConfig?
   settings   PropertySettings?
+  listings   PropertyListing[]
 
   // Enhanced indexing for better query performance
   @@index([agencyId, status]) // Primary compound index for agency filtering
@@ -250,6 +255,7 @@ model Invoice {
   @@index([status, dueAt])
   @@index([status, leaseId])
   @@index([agencyId, status])
+  shares InvoiceShare[]
 }
 
 enum InvoiceStatus {
@@ -284,6 +290,7 @@ model Payment {
   @@index([referenceNumber]) // Reference number lookup
   @@index([agencyId, method, paidAt]) // Comprehensive payment analytics
   @@index([createdAt]) // Payment creation timeline
+  receipts PaymentReceipt[]
 }
 
 // Caretaker Payment Management
@@ -374,6 +381,7 @@ model Message {
   properties      String[]      @default([]) @db.ObjectId // Properties related to message
   leases          String[]      @default([]) @db.ObjectId // Leases related to message
   metadata        Json?         // Additional message metadata
+  invoiceShares   InvoiceShare[] // Invoice shares using this message
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
@@ -874,6 +882,9 @@ model Agent {
   commissionPayments AgentCommissionPayment[]
   settings        AgentSettings?
   assignedProperties String[] @default([]) @db.ObjectId // Properties agent can access
+  listings        PropertyListing[]
+  viewings        PropertyViewing[]
+  sales           PropertySale[]
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -1323,6 +1334,207 @@ model UserSettings {
   updatedAt             DateTime  @updatedAt
 
   @@index([userId])
+}
+
+// Property Sales Management Models
+model PropertyListing {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  propertyId        String    @db.ObjectId
+  property          Property  @relation(fields: [propertyId], references: [id])
+  listingPrice      Int       // Price in cents
+  description       String
+  features          String[]  @default([])
+  photos            String[]  @default([])
+  agentId           String?   @db.ObjectId
+  agent             Agent?    @relation(fields: [agentId], references: [id])
+  marketingChannels String[]  @default([])
+  availableFrom     DateTime  @default(now())
+  negotiable        Boolean   @default(true)
+  status            String    @default("ACTIVE") // ACTIVE, INACTIVE, SOLD, WITHDRAWN
+  soldAt            DateTime?
+  soldPrice         Int?
+  createdBy         String?   // User/Agent ID who created listing
+  updatedBy         String?   // User/Agent ID who last updated
+  inquiries         PropertyInquiry[]
+  viewings          PropertyViewing[]
+  sales             PropertySale[]
+  marketAnalysis    PropertyMarketAnalysis[]
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([propertyId])
+  @@index([status])
+  @@index([agentId])
+  @@index([listingPrice])
+  @@unique([propertyId, status]) // Only one active listing per property
+}
+
+model PropertyInquiry {
+  id                    String    @id @default(auto()) @map("_id") @db.ObjectId
+  listingId             String    @db.ObjectId
+  listing               PropertyListing @relation(fields: [listingId], references: [id])
+  buyerName             String
+  buyerPhone            String
+  buyerEmail            String?
+  message               String?
+  interestedPrice       Int?      // Price buyer is interested in (cents)
+  financingType         String?   // CASH, MORTGAGE, MIXED
+  viewingRequested      Boolean   @default(false)
+  preferredViewingDate  DateTime?
+  status                String    @default("NEW") // NEW, CONTACTED, VIEWING_SCHEDULED, VIEWED, OFFER_MADE, NEGOTIATING, CLOSED, LOST
+  notes                 String?
+  followUpDate          DateTime?
+  offerAmount           Int?      // Official offer amount (cents)
+  agentResponse         String?
+  updatedBy             String?   // User/Agent ID who last updated
+  viewings              PropertyViewing[]
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([listingId])
+  @@index([status])
+  @@index([buyerPhone])
+}
+
+model PropertyViewing {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  listingId     String    @db.ObjectId
+  listing       PropertyListing @relation(fields: [listingId], references: [id])
+  inquiryId     String?   @db.ObjectId
+  inquiry       PropertyInquiry? @relation(fields: [inquiryId], references: [id])
+  viewerName    String
+  viewerPhone   String
+  viewerEmail   String?
+  scheduledAt   DateTime
+  duration      Int       @default(60) // Duration in minutes
+  agentId       String?   @db.ObjectId
+  agent         Agent?    @relation(fields: [agentId], references: [id])
+  status        String    @default("SCHEDULED") // SCHEDULED, COMPLETED, CANCELLED, NO_SHOW
+  feedback      String?
+  rating        Int?      // 1-5 rating
+  notes         String?
+  followUpRequired Boolean @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([listingId])
+  @@index([scheduledAt])
+  @@index([status])
+  @@index([agentId])
+}
+
+model PropertySale {
+  id                    String    @id @default(auto()) @map("_id") @db.ObjectId
+  listingId             String    @db.ObjectId
+  listing               PropertyListing @relation(fields: [listingId], references: [id])
+  inquiryId             String?   @db.ObjectId
+  inquiry               PropertyInquiry? @relation(fields: [inquiryId], references: [id])
+  buyerName             String
+  buyerPhone            String
+  buyerEmail            String?
+  salePrice             Int       // Final sale price in cents
+  agentId               String?   @db.ObjectId
+  agent                 Agent?    @relation(fields: [agentId], references: [id])
+  agentCommissionRate   Float?    // Commission rate used
+  agentCommissionAmount Int?      // Commission amount in cents
+  saleDate              DateTime  @default(now())
+  paymentMethod         String    @default("CASH") // CASH, MORTGAGE, MIXED
+  notes                 String?
+  recordedBy            String?   // User/Agent ID who recorded sale
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([listingId])
+  @@index([agentId])
+  @@index([saleDate])
+}
+
+model PropertyMarketAnalysis {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  listingId         String    @db.ObjectId
+  listing           PropertyListing @relation(fields: [listingId], references: [id])
+  averageMarketPrice Int      // Average market price in cents
+  pricePerSqFt      Float?    // Price per square foot
+  comparableProperties Json   // Array of comparable property data
+  marketTrends      Json?     // Market trend analysis
+  recommendedPrice  Int?      // Recommended listing price
+  daysOnMarket      Int?      // Average days on market for similar properties
+  analysisDate      DateTime  @default(now())
+  createdBy         String?   // User/Agent ID who created analysis
+  createdAt         DateTime  @default(now())
+
+  @@index([listingId])
+  @@index([analysisDate])
+}
+
+// Custom Fields for Entities
+model CustomField {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  agencyId      String    @db.ObjectId
+  agency        Agency    @relation(fields: [agencyId], references: [id])
+  name          String    // Field name (used in code)
+  label         String    // Display label
+  type          String    // text, number, date, boolean, select, textarea
+  entityType    String    // property, tenant, lease, agent, caretaker
+  required      Boolean   @default(false)
+  options       String[]  @default([]) // For select fields
+  defaultValue  String?
+  validation    Json?     // Validation rules
+  displayOrder  Int       @default(0)
+  isActive      Boolean   @default(true)
+  createdBy     String?   // User ID who created field
+  updatedBy     String?   // User ID who last updated
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([agencyId])
+  @@index([entityType])
+  @@unique([agencyId, name, entityType])
+}
+
+// Invoice Sharing and Receipt Models
+model InvoiceShare {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  invoiceId         String    @db.ObjectId
+  invoice           Invoice   @relation(fields: [invoiceId], references: [id])
+  agencyId          String    @db.ObjectId
+  agency            Agency    @relation(fields: [agencyId], references: [id])
+  sharedBy          String    @db.ObjectId // User ID who shared
+  sharedByUser      User      @relation(fields: [sharedBy], references: [id])
+  channels          String[]  @default([]) // email, sms, whatsapp
+  recipientType     String    // TENANT, AGENT, USER
+  recipientId       String    @db.ObjectId
+  messageId         String?   @db.ObjectId // Reference to message
+  message           Message?  @relation(fields: [messageId], references: [id])
+  includePaymentLink Boolean  @default(true)
+  customMessage     String?
+  deliveryStatus    Json?     // Channel-specific delivery status
+  createdAt         DateTime  @default(now())
+
+  @@index([invoiceId])
+  @@index([agencyId])
+  @@index([sharedBy])
+  @@index([recipientId, recipientType])
+}
+
+model PaymentReceipt {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  paymentId         String    @db.ObjectId
+  payment           Payment   @relation(fields: [paymentId], references: [id])
+  invoiceId         String    @db.ObjectId
+  invoice           Invoice   @relation(fields: [invoiceId], references: [id])
+  agencyId          String    @db.ObjectId
+  agency            Agency    @relation(fields: [agencyId], references: [id])
+  receiptNumber     String    @unique
+  receiptData       Json      // Complete receipt data with branding
+  generatedBy       String    @db.ObjectId // User ID who generated
+  generatedByUser   User      @relation(fields: [generatedBy], references: [id])
+  createdAt         DateTime  @default(now())
+
+  @@index([paymentId])
+  @@index([invoiceId])
+  @@index([agencyId])
+  @@index([receiptNumber])
 }
 
 // Agency Settings and Configuration
