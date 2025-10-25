@@ -81,6 +81,40 @@ I have successfully implemented a comprehensive agency management system for the
 - `/api/src/routes/propertySales.js` - Property sales management API
 - New Prisma models for listings, inquiries, viewings, and sales
 
+#### Property Sales Workflow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant PropertySalesAPI
+    participant Prisma as Database
+    participant Commission as Commission Logic
+
+    User->>PropertySalesAPI: POST /listings (create)
+    PropertySalesAPI->>Prisma: Verify property & agent in agency
+    Prisma-->>PropertySalesAPI: ✓ Confirmed
+    PropertySalesAPI->>Prisma: Create PropertyListing
+    Prisma-->>PropertySalesAPI: Listing created
+
+    User->>PropertySalesAPI: POST /inquiries (buyer inquiry)
+    PropertySalesAPI->>Prisma: Verify listing is active
+    Prisma-->>PropertySalesAPI: ✓ Active
+    PropertySalesAPI->>Prisma: Create PropertyInquiry (status: NEW)
+    Prisma-->>PropertySalesAPI: Inquiry created
+
+    User->>PropertySalesAPI: POST /sales (record sale)
+    PropertySalesAPI->>Prisma: Fetch listing & agent
+    Prisma-->>PropertySalesAPI: Listing & agent data
+    PropertySalesAPI->>Commission: Calculate commission
+    Commission-->>PropertySalesAPI: Commission amount
+    PropertySalesAPI->>Prisma: Create PropertySale record
+    PropertySalesAPI->>Prisma: Update listing to SOLD
+    PropertySalesAPI->>Prisma: Update agent earned total
+    PropertySalesAPI->>Prisma: Update inquiry to CLOSED
+    Prisma-->>PropertySalesAPI: All updated
+    PropertySalesAPI-->>User: Sale recorded with commission
+```
+
 ### 7. System Customization Features ✅
 - **Branding Customization**: Logo, colors, and business information
 - **Multi-Currency Support**: Currency selection and exchange rates
