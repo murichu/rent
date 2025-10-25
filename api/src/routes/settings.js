@@ -36,6 +36,24 @@ const userSettingsSchema = z.object({
   allowMarketingEmails: z.boolean().optional(),
   autoLogoutMinutes: z.number().int().min(5).max(480).optional(),
   sessionTimeout: z.number().int().min(60).max(10080).optional(),
+  
+  // Property Manager Branding
+  enableCustomBranding: z.boolean().optional(),
+  businessName: z.string().max(200).optional(),
+  businessAddress: z.string().max(500).optional(),
+  businessPhone: z.string().optional(),
+  businessEmail: z.string().email().optional(),
+  businessWebsite: z.string().url().optional(),
+  businessLicense: z.string().optional(),
+  taxId: z.string().optional(),
+  logoUrl: z.string().url().optional(),
+  primaryColor: z.string().regex(/^#[0-9A-F]{6}$/i).optional(),
+  secondaryColor: z.string().regex(/^#[0-9A-F]{6}$/i).optional(),
+  accentColor: z.string().regex(/^#[0-9A-F]{6}$/i).optional(),
+  invoicePrefix: z.string().max(10).optional(),
+  showWatermark: z.boolean().optional(),
+  watermarkText: z.string().max(50).optional(),
+  footerText: z.string().max(500).optional(),
 });
 
 const agencySettingsSchema = z.object({
@@ -450,6 +468,282 @@ router.post('/import',
         error: error.message
       });
       return errorResponse(res, 'Failed to import user settings', 500);
+    }
+  }
+);
+
+/**
+ * GET /api/v1/settings/branding
+ * Get current user's property manager branding settings
+ */
+router.get('/branding', requireAuth, async (req, res) => {
+  try {
+    const userSettings = await prisma.userSettings.findUnique({
+      where: { userId: req.user.userId },
+      select: {
+        enableCustomBranding: true,
+        businessName: true,
+        businessAddress: true,
+        businessPhone: true,
+        businessEmail: true,
+        businessWebsite: true,
+        businessLicense: true,
+        taxId: true,
+        logoUrl: true,
+        primaryColor: true,
+        secondaryColor: true,
+        accentColor: true,
+        invoicePrefix: true,
+        showWatermark: true,
+        watermarkText: true,
+        footerText: true,
+      }
+    });
+
+    const branding = userSettings || {
+      enableCustomBranding: false,
+      businessName: null,
+      businessAddress: null,
+      businessPhone: null,
+      businessEmail: null,
+      businessWebsite: null,
+      businessLicense: null,
+      taxId: null,
+      logoUrl: null,
+      primaryColor: '#2563eb',
+      secondaryColor: '#64748b',
+      accentColor: '#059669',
+      invoicePrefix: 'INV',
+      showWatermark: false,
+      watermarkText: 'CONFIDENTIAL',
+      footerText: null,
+    };
+
+    businessLog('branding_settings_viewed', {
+      userId: req.user.userId,
+      enableCustomBranding: branding.enableCustomBranding
+    });
+
+    return successResponse(res, branding, 'Branding settings retrieved successfully');
+  } catch (error) {
+    logger.error('Failed to get branding settings:', {
+      userId: req.user.userId,
+      error: error.message
+    });
+    return errorResponse(res, 'Failed to retrieve branding settings', 500);
+  }
+});
+
+/**
+ * PUT /api/v1/settings/branding
+ * Update current user's property manager branding settings
+ */
+router.put('/branding', 
+  requireAuth,
+  validateRequest({ 
+    body: z.object({
+      enableCustomBranding: z.boolean().optional(),
+      businessName: z.string().max(200).optional(),
+      businessAddress: z.string().max(500).optional(),
+      businessPhone: z.string().optional(),
+      businessEmail: z.string().email().optional(),
+      businessWebsite: z.string().url().optional(),
+      businessLicense: z.string().optional(),
+      taxId: z.string().optional(),
+      logoUrl: z.string().url().optional(),
+      primaryColor: z.string().regex(/^#[0-9A-F]{6}$/i).optional(),
+      secondaryColor: z.string().regex(/^#[0-9A-F]{6}$/i).optional(),
+      accentColor: z.string().regex(/^#[0-9A-F]{6}$/i).optional(),
+      invoicePrefix: z.string().max(10).optional(),
+      showWatermark: z.boolean().optional(),
+      watermarkText: z.string().max(50).optional(),
+      footerText: z.string().max(500).optional(),
+    })
+  }),
+  async (req, res) => {
+    try {
+      const brandingData = req.body;
+
+      const userSettings = await prisma.userSettings.upsert({
+        where: { userId: req.user.userId },
+        update: {
+          ...brandingData,
+          updatedAt: new Date()
+        },
+        create: {
+          userId: req.user.userId,
+          ...brandingData
+        },
+        select: {
+          enableCustomBranding: true,
+          businessName: true,
+          businessAddress: true,
+          businessPhone: true,
+          businessEmail: true,
+          businessWebsite: true,
+          businessLicense: true,
+          taxId: true,
+          logoUrl: true,
+          primaryColor: true,
+          secondaryColor: true,
+          accentColor: true,
+          invoicePrefix: true,
+          showWatermark: true,
+          watermarkText: true,
+          footerText: true,
+        }
+      });
+
+      businessLog('branding_settings_updated', {
+        userId: req.user.userId,
+        updatedFields: Object.keys(brandingData),
+        enableCustomBranding: userSettings.enableCustomBranding
+      });
+
+      return successResponse(res, userSettings, 'Branding settings updated successfully');
+    } catch (error) {
+      logger.error('Failed to update branding settings:', {
+        userId: req.user.userId,
+        error: error.message,
+        data: req.body
+      });
+      return errorResponse(res, 'Failed to update branding settings', 500);
+    }
+  }
+);
+
+/**
+ * POST /api/v1/settings/branding/preview
+ * Preview branding settings with sample invoice data
+ */
+router.post('/branding/preview', 
+  requireAuth,
+  validateRequest({ 
+    body: z.object({
+      branding: z.object({
+        businessName: z.string().optional(),
+        businessAddress: z.string().optional(),
+        businessPhone: z.string().optional(),
+        businessEmail: z.string().email().optional(),
+        businessWebsite: z.string().url().optional(),
+        logoUrl: z.string().url().optional(),
+        primaryColor: z.string().regex(/^#[0-9A-F]{6}$/i).optional(),
+        secondaryColor: z.string().regex(/^#[0-9A-F]{6}$/i).optional(),
+        accentColor: z.string().regex(/^#[0-9A-F]{6}$/i).optional(),
+        invoicePrefix: z.string().max(10).optional(),
+        showWatermark: z.boolean().optional(),
+        watermarkText: z.string().max(50).optional(),
+        footerText: z.string().max(500).optional(),
+      })
+    })
+  }),
+  async (req, res) => {
+    try {
+      const { branding } = req.body;
+      
+      // Import branding service
+      const { invoiceBrandingService } = await import('../services/invoiceBrandingService.js');
+      
+      // Create sample invoice data for preview
+      const sampleInvoiceData = {
+        id: 'preview-123',
+        amount: 50000, // KES 50,000
+        issuedAt: new Date(),
+        dueAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+        periodYear: new Date().getFullYear(),
+        periodMonth: new Date().getMonth() + 1,
+        lease: {
+          tenant: {
+            name: 'John Doe',
+            email: 'john.doe@example.com',
+            phone: '+254700123456'
+          },
+          property: {
+            title: 'Sunset Apartments',
+            address: '123 Westlands Road',
+            city: 'Nairobi',
+            state: 'Nairobi County',
+            zip: '00100'
+          },
+          unit: {
+            unitNumber: 'A-101'
+          }
+        },
+        payments: [],
+        penalties: []
+      };
+
+      // Build preview with custom branding
+      const previewBranding = {
+        businessName: branding.businessName || 'Your Business Name',
+        businessAddress: branding.businessAddress || '123 Business Street, City',
+        businessPhone: branding.businessPhone || '+254700000000',
+        businessEmail: branding.businessEmail || 'info@yourbusiness.com',
+        businessWebsite: branding.businessWebsite || 'www.yourbusiness.com',
+        logoUrl: branding.logoUrl,
+        primaryColor: branding.primaryColor || '#2563eb',
+        secondaryColor: branding.secondaryColor || '#64748b',
+        accentColor: branding.accentColor || '#059669',
+        invoicePrefix: branding.invoicePrefix || 'INV',
+        showWatermark: branding.showWatermark || false,
+        watermarkText: branding.watermarkText || 'CONFIDENTIAL',
+        footerText: branding.footerText,
+        currency: 'KES'
+      };
+
+      const styling = invoiceBrandingService.getStylingOptions(previewBranding);
+      const layout = invoiceBrandingService.getLayoutOptions(previewBranding);
+      const calculations = invoiceBrandingService.calculateInvoiceTotals(sampleInvoiceData);
+      
+      const content = {
+        header: {
+          businessInfo: {
+            name: previewBranding.businessName,
+            address: previewBranding.businessAddress,
+            phone: previewBranding.businessPhone,
+            email: previewBranding.businessEmail,
+            website: previewBranding.businessWebsite
+          },
+          logoUrl: previewBranding.logoUrl,
+          invoiceInfo: {
+            number: `${previewBranding.invoicePrefix}-PREVIEW`,
+            date: sampleInvoiceData.issuedAt,
+            dueDate: sampleInvoiceData.dueAt,
+            period: 'Preview Period'
+          }
+        },
+        billTo: {
+          tenant: sampleInvoiceData.lease.tenant,
+          property: sampleInvoiceData.lease.property
+        },
+        lineItems: [{
+          description: `Rent - ${sampleInvoiceData.lease.property.title} Unit ${sampleInvoiceData.lease.unit.unitNumber}`,
+          period: 'Preview Period',
+          amount: sampleInvoiceData.amount,
+          type: 'rent'
+        }],
+        footer: {
+          text: previewBranding.footerText,
+          watermark: previewBranding.showWatermark ? previewBranding.watermarkText : null
+        }
+      };
+
+      const html = invoiceBrandingService.buildInvoiceHTML(content, styling, previewBranding, calculations);
+      const css = invoiceBrandingService.buildInvoiceCSS(styling, previewBranding);
+
+      return successResponse(res, {
+        html,
+        css,
+        branding: previewBranding,
+        styling,
+        layout
+      }, 'Branding preview generated successfully');
+    } catch (error) {
+      logger.error('Failed to generate branding preview:', {
+        userId: req.user.userId,
+        error: error.message
+      });
+      return errorResponse(res, 'Failed to generate branding preview', 500);
     }
   }
 );
