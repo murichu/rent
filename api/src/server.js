@@ -38,6 +38,7 @@ import { ensureStateless, stickySessionAlternative, loadBalancerHeaders, gracefu
 import { loadBalancerService } from "./services/loadBalancerService.js";
 import logger, { morganStream } from "./utils/logger.js";
 import { initializeCronJobs } from "./jobs/cronJobs.js";
+import { reportsRouter } from "./routes/reports.js";
 
 // Environment configuration is now handled in config/environment.js
 
@@ -287,6 +288,17 @@ v1Router.use("/caretakers", caretakerRouter);
 // Messaging router
 import { messagingRouter } from "./routes/messaging.js";
 v1Router.use("/messages", messagingRouter);
+
+// Reports router
+v1Router.use("/reports", reportsRouter);
+
+// Property Sales router
+import { propertySalesRouter } from "./routes/propertySales.js";
+v1Router.use("/property-sales", propertySalesRouter);
+
+// Customization router
+import { customizationRouter } from "./routes/customization.js";
+v1Router.use("/customization", customizationRouter);
 
 // TODO: Add these routers when implemented
 // v1Router.use("/2fa", twoFactorRouter);

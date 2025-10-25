@@ -6,6 +6,9 @@ import logger from '../utils/logger.js';
 import { jobQueue } from './jobQueue.js';
 import { prisma } from '../db.js';
 import { sendEmail } from './email.js';
+import ExcelJS from 'exceljs';
+import PDFDocument from 'pdfkit';
+import { Parser } from 'json2csv';
 
 /**
  * Export Service for handling large data exports
@@ -22,6 +25,592 @@ class ExportService {
     
     // Register job processors
     this.registerProcessors();
+  }
+
+  /**
+   * Export report to PDF format
+   */
+  async exportToPDF(reportData, reportType) {
+    try {
+      const doc = new PDFDocument({ margin: 50 });
+      const chunks = [];
+
+      doc.on('data', chunk => chunks.push(chunk));
+      doc.on('end', () => {});
+
+      // Add header
+      doc.fontSize(20).text(`${this.formatReportTitle(reportType)}`, { align: 'center' });
+      doc.moveDown();
+
+      // Add period information
+      if (reportData.period) {
+        doc.fontSize(12).text(`Period: ${new Date(reportData.period.start).toLocaleDateString()} - ${new Date(reportData.period.end).toLocaleDateString()}`, { align: 'center' });
+        doc.moveDown();
+      }
+
+      // Add summary section
+      if (reportData.summary) {
+        doc.fontSize(16).text('Summary', { underline: true });
+        doc.moveDown(0.5);
+        
+        Object.entries(reportData.summary).forEach(([key, value]) => {
+          if (typeof value === 'number') {
+            const formattedValue = key.toLowerCase().includes('rate') || key.toLowerCase().includes('margin') 
+              ? `${value.toFixed(2)}%` 
+              : key.toLowerCase().includes('amount') || key.toLowerCase().includes('cost') || key.toLowerCase().includes('income')
+              ? `KES ${value.toLocaleString()}`
+              : value.toLocaleString();
+            doc.fontSize(10).text(`${this.formatLabel(key)}: ${formattedValue}`);
+          } else if (typeof value === 'object' && value !== null) {
+            doc.fontSize(10).text(`${this.formatLabel(key)}: ${JSON.stringify(value)}`);
+          } else {
+            doc.fontSize(10).text(`${this.formatLabel(key)}: ${value}`);
+          }
+        });
+        doc.moveDown();
+      }
+
+      // Add detailed data based on report type
+      this.addReportDetails(doc, reportData, reportType);
+
+      // Add footer
+      doc.fontSize(8).text(`Generated on: ${new Date().toLocaleString()}`, 50, doc.page.height - 50);
+      doc.text(`Report Type: ${reportType}`, 50, doc.page.height - 35);
+
+      doc.end();
+
+      return new Promise((resolve) => {
+        doc.on('end', () => {
+          resolve(Buffer.concat(chunks));
+        });
+      });
+    } catch (error) {
+      logger.error('Error exporting to PDF:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Export report to Excel format
+   */
+  async exportToExcel(reportData, reportType) {
+    try {
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'Property Management System';
+      workbook.created = new Date();
+
+      // Summary worksheet
+      const summarySheet = workbook.addWorksheet('Summary');
+      this.addExcelSummary(summarySheet, reportData, reportType);
+
+      // Add detailed data worksheets based on report type
+      this.addExcelDetails(workbook, reportData, reportType);
+
+      // Generate buffer
+      const buffer = await workbook.xlsx.writeBuffer();
+      return buffer;
+    } catch (error) {
+      logger.error('Error exporting to Excel:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Export report to CSV format
+   */
+  async exportToCSV(reportData, reportType) {
+    try {
+      let csvData = '';
+
+      // Add summary as CSV
+      if (reportData.summary) {
+        csvData += `${this.formatReportTitle(reportType)} - Summary\n`;
+        if (reportData.period) {
+          csvData += `Period,${new Date(reportData.period.start).toLocaleDateString()} - ${new Date(reportData.period.end).toLocaleDateString()}\n`;
+        }
+        csvData += '\nMetric,Value\n';
+        
+        Object.entries(reportData.summary).forEach(([key, value]) => {
+          if (typeof value === 'number') {
+            const formattedValue = key.toLowerCase().includes('rate') || key.toLowerCase().includes('margin') 
+              ? `${value.toFixed(2)}%` 
+              : key.toLowerCase().includes('amount') || key.toLowerCase().includes('cost') || key.toLowerCase().includes('income')
+              ? value
+              : value;
+            csvData += `${this.formatLabel(key)},${formattedValue}\n`;
+          } else if (typeof value !== 'object') {
+            csvData += `${this.formatLabel(key)},${value}\n`;
+          }
+        });
+        csvData += '\n';
+      }
+
+      // Add detailed data based on report type
+      csvData += this.getCSVDetails(reportData, reportType);
+
+      return csvData;
+    } catch (error) {
+      logger.error('Error exporting to CSV:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Add report details to PDF document
+   */
+  addReportDetails(doc, reportData, reportType) {
+    switch (reportType) {
+      case 'financial-report':
+        this.addFinancialDetailsToPDF(doc, reportData);
+        break;
+      case 'occupancy-report':
+        this.addOccupancyDetailsToPDF(doc, reportData);
+        break;
+      case 'agent-performance-report':
+        this.addAgentPerformanceDetailsToPDF(doc, reportData);
+        break;
+      case 'maintenance-report':
+        this.addMaintenanceDetailsToPDF(doc, reportData);
+        break;
+      default:
+        this.addGenericDetailsToPDF(doc, reportData);
+    }
+  }
+
+  /**
+   * Add financial details to PDF
+   */
+  addFinancialDetailsToPDF(doc, reportData) {
+    if (reportData.rentCollection) {
+      doc.fontSize(14).text('Rent Collection by Method', { underline: true });
+      doc.moveDown(0.5);
+      Object.entries(reportData.rentCollection.byMethod).forEach(([method, amount]) => {
+        doc.fontSize(10).text(`${method}: KES ${amount.toLocaleString()}`);
+      });
+      doc.moveDown();
+    }
+
+    if (reportData.expenses) {
+      doc.fontSize(14).text('Expenses by Category', { underline: true });
+      doc.moveDown(0.5);
+      Object.entries(reportData.expenses.byCategory).forEach(([category, amount]) => {
+        doc.fontSize(10).text(`${category}: KES ${amount.toLocaleString()}`);
+      });
+      doc.moveDown();
+    }
+  }
+
+  /**
+   * Add occupancy details to PDF
+   */
+  addOccupancyDetailsToPDF(doc, reportData) {
+    if (reportData.propertyMetrics && reportData.propertyMetrics.length > 0) {
+      doc.fontSize(14).text('Property Performance', { underline: true });
+      doc.moveDown(0.5);
+      
+      reportData.propertyMetrics.forEach(property => {
+        doc.fontSize(10).text(`${property.propertyTitle}:`);
+        doc.fontSize(9).text(`  Occupancy: ${property.occupancyRate.toFixed(1)}% (${property.occupiedUnits}/${property.totalUnits} units)`);
+        doc.fontSize(9).text(`  Collection Rate: ${property.collectionRate.toFixed(1)}%`);
+        doc.fontSize(9).text(`  Rent Collected: KES ${property.rentCollected.toLocaleString()}`);
+        doc.moveDown(0.3);
+      });
+    }
+  }
+
+  /**
+   * Add agent performance details to PDF
+   */
+  addAgentPerformanceDetailsToPDF(doc, reportData) {
+    if (reportData.agentPerformance && reportData.agentPerformance.length > 0) {
+      doc.fontSize(14).text('Agent Performance Details', { underline: true });
+      doc.moveDown(0.5);
+      
+      reportData.agentPerformance.slice(0, 10).forEach((agent, index) => {
+        doc.fontSize(10).text(`${index + 1}. ${agent.agentName}`);
+        doc.fontSize(9).text(`  Properties: ${agent.propertiesManaged}, Tenants: ${agent.tenantsManaged}`);
+        doc.fontSize(9).text(`  Rent Collected: KES ${agent.rentCollected.toLocaleString()}`);
+        doc.fontSize(9).text(`  Commissions: KES ${agent.commissionsEarned.toLocaleString()}`);
+        doc.moveDown(0.3);
+      });
+    }
+  }
+
+  /**
+   * Add maintenance details to PDF
+   */
+  addMaintenanceDetailsToPDF(doc, reportData) {
+    if (reportData.breakdowns) {
+      doc.fontSize(14).text('Maintenance Breakdown', { underline: true });
+      doc.moveDown(0.5);
+      
+      if (reportData.breakdowns.byCategory) {
+        doc.fontSize(12).text('By Category:');
+        Object.entries(reportData.breakdowns.byCategory).forEach(([category, count]) => {
+          doc.fontSize(10).text(`  ${category}: ${count} requests`);
+        });
+        doc.moveDown(0.5);
+      }
+
+      if (reportData.breakdowns.byPriority) {
+        doc.fontSize(12).text('By Priority:');
+        Object.entries(reportData.breakdowns.byPriority).forEach(([priority, count]) => {
+          doc.fontSize(10).text(`  ${priority}: ${count} requests`);
+        });
+      }
+    }
+  }
+
+  /**
+   * Add generic details to PDF
+   */
+  addGenericDetailsToPDF(doc, reportData) {
+    Object.entries(reportData).forEach(([key, value]) => {
+      if (key !== 'summary' && key !== 'period' && key !== 'generatedAt') {
+        doc.fontSize(14).text(this.formatLabel(key), { underline: true });
+        doc.moveDown(0.5);
+        
+        if (Array.isArray(value)) {
+          value.slice(0, 20).forEach(item => {
+            if (typeof item === 'object') {
+              const displayText = item.name || item.title || item.id || JSON.stringify(item).substring(0, 100);
+              doc.fontSize(9).text(`• ${displayText}`);
+            } else {
+              doc.fontSize(9).text(`• ${item}`);
+            }
+          });
+        } else if (typeof value === 'object') {
+          Object.entries(value).forEach(([subKey, subValue]) => {
+            doc.fontSize(9).text(`${this.formatLabel(subKey)}: ${subValue}`);
+          });
+        }
+        doc.moveDown();
+      }
+    });
+  }
+
+  /**
+   * Add summary to Excel worksheet
+   */
+  addExcelSummary(worksheet, reportData, reportType) {
+    worksheet.name = 'Summary';
+    
+    // Add title
+    worksheet.addRow([this.formatReportTitle(reportType)]);
+    worksheet.getRow(1).font = { bold: true, size: 16 };
+    worksheet.addRow([]);
+
+    // Add period
+    if (reportData.period) {
+      worksheet.addRow(['Period', `${new Date(reportData.period.start).toLocaleDateString()} - ${new Date(reportData.period.end).toLocaleDateString()}`]);
+      worksheet.addRow([]);
+    }
+
+    // Add summary data
+    if (reportData.summary) {
+      worksheet.addRow(['Metric', 'Value']);
+      worksheet.getRow(worksheet.rowCount).font = { bold: true };
+      
+      Object.entries(reportData.summary).forEach(([key, value]) => {
+        if (typeof value === 'number') {
+          worksheet.addRow([this.formatLabel(key), value]);
+        } else if (typeof value !== 'object') {
+          worksheet.addRow([this.formatLabel(key), value]);
+        }
+      });
+    }
+
+    // Auto-fit columns
+    worksheet.columns.forEach(column => {
+      column.width = 20;
+    });
+  }
+
+  /**
+   * Add detailed data to Excel workbook
+   */
+  addExcelDetails(workbook, reportData, reportType) {
+    switch (reportType) {
+      case 'financial-report':
+        this.addFinancialDetailsToExcel(workbook, reportData);
+        break;
+      case 'occupancy-report':
+        this.addOccupancyDetailsToExcel(workbook, reportData);
+        break;
+      case 'agent-performance-report':
+        this.addAgentPerformanceDetailsToExcel(workbook, reportData);
+        break;
+      case 'maintenance-report':
+        this.addMaintenanceDetailsToExcel(workbook, reportData);
+        break;
+      default:
+        this.addGenericDetailsToExcel(workbook, reportData);
+    }
+  }
+
+  /**
+   * Add financial details to Excel
+   */
+  addFinancialDetailsToExcel(workbook, reportData) {
+    if (reportData.rentCollection?.byMethod) {
+      const sheet = workbook.addWorksheet('Rent Collection');
+      sheet.addRow(['Payment Method', 'Amount']);
+      sheet.getRow(1).font = { bold: true };
+      
+      Object.entries(reportData.rentCollection.byMethod).forEach(([method, amount]) => {
+        sheet.addRow([method, amount]);
+      });
+    }
+
+    if (reportData.expenses?.byCategory) {
+      const sheet = workbook.addWorksheet('Expenses');
+      sheet.addRow(['Category', 'Amount']);
+      sheet.getRow(1).font = { bold: true };
+      
+      Object.entries(reportData.expenses.byCategory).forEach(([category, amount]) => {
+        sheet.addRow([category, amount]);
+      });
+    }
+  }
+
+  /**
+   * Add occupancy details to Excel
+   */
+  addOccupancyDetailsToExcel(workbook, reportData) {
+    if (reportData.propertyMetrics) {
+      const sheet = workbook.addWorksheet('Property Metrics');
+      sheet.addRow(['Property', 'Total Units', 'Occupied', 'Vacant', 'Occupancy Rate', 'Rent Collected', 'Collection Rate']);
+      sheet.getRow(1).font = { bold: true };
+      
+      reportData.propertyMetrics.forEach(property => {
+        sheet.addRow([
+          property.propertyTitle,
+          property.totalUnits,
+          property.occupiedUnits,
+          property.vacantUnits,
+          property.occupancyRate,
+          property.rentCollected,
+          property.collectionRate
+        ]);
+      });
+    }
+  }
+
+  /**
+   * Add agent performance details to Excel
+   */
+  addAgentPerformanceDetailsToExcel(workbook, reportData) {
+    if (reportData.agentPerformance) {
+      const sheet = workbook.addWorksheet('Agent Performance');
+      sheet.addRow(['Agent Name', 'Properties', 'Tenants', 'Rent Collected', 'Commissions Earned', 'Commission Rate']);
+      sheet.getRow(1).font = { bold: true };
+      
+      reportData.agentPerformance.forEach(agent => {
+        sheet.addRow([
+          agent.agentName,
+          agent.propertiesManaged,
+          agent.tenantsManaged,
+          agent.rentCollected,
+          agent.commissionsEarned,
+          agent.commissionRate
+        ]);
+      });
+    }
+  }
+
+  /**
+   * Add maintenance details to Excel
+   */
+  addMaintenanceDetailsToExcel(workbook, reportData) {
+    if (reportData.requests) {
+      const sheet = workbook.addWorksheet('Maintenance Requests');
+      sheet.addRow(['Title', 'Category', 'Priority', 'Status', 'Property', 'Tenant', 'Created', 'Completed', 'Cost']);
+      sheet.getRow(1).font = { bold: true };
+      
+      reportData.requests.forEach(request => {
+        sheet.addRow([
+          request.title,
+          request.category,
+          request.priority,
+          request.status,
+          request.propertyTitle,
+          request.tenantName,
+          request.createdAt,
+          request.completedDate,
+          request.actualCost || request.estimatedCost
+        ]);
+      });
+    }
+  }
+
+  /**
+   * Add generic details to Excel
+   */
+  addGenericDetailsToExcel(workbook, reportData) {
+    Object.entries(reportData).forEach(([key, value]) => {
+      if (key !== 'summary' && key !== 'period' && key !== 'generatedAt' && Array.isArray(value)) {
+        const sheet = workbook.addWorksheet(this.formatLabel(key));
+        
+        if (value.length > 0 && typeof value[0] === 'object') {
+          const headers = Object.keys(value[0]);
+          sheet.addRow(headers.map(h => this.formatLabel(h)));
+          sheet.getRow(1).font = { bold: true };
+          
+          value.forEach(item => {
+            sheet.addRow(headers.map(h => item[h]));
+          });
+        }
+      }
+    });
+  }
+
+  /**
+   * Get CSV details for different report types
+   */
+  getCSVDetails(reportData, reportType) {
+    let csvData = '';
+
+    switch (reportType) {
+      case 'financial-report':
+        csvData += this.getFinancialCSVDetails(reportData);
+        break;
+      case 'occupancy-report':
+        csvData += this.getOccupancyCSVDetails(reportData);
+        break;
+      case 'agent-performance-report':
+        csvData += this.getAgentPerformanceCSVDetails(reportData);
+        break;
+      case 'maintenance-report':
+        csvData += this.getMaintenanceCSVDetails(reportData);
+        break;
+      default:
+        csvData += this.getGenericCSVDetails(reportData);
+    }
+
+    return csvData;
+  }
+
+  /**
+   * Get financial CSV details
+   */
+  getFinancialCSVDetails(reportData) {
+    let csvData = '';
+
+    if (reportData.rentCollection?.byMethod) {
+      csvData += 'Rent Collection by Method\n';
+      csvData += 'Payment Method,Amount\n';
+      Object.entries(reportData.rentCollection.byMethod).forEach(([method, amount]) => {
+        csvData += `${method},${amount}\n`;
+      });
+      csvData += '\n';
+    }
+
+    if (reportData.expenses?.byCategory) {
+      csvData += 'Expenses by Category\n';
+      csvData += 'Category,Amount\n';
+      Object.entries(reportData.expenses.byCategory).forEach(([category, amount]) => {
+        csvData += `${category},${amount}\n`;
+      });
+    }
+
+    return csvData;
+  }
+
+  /**
+   * Get occupancy CSV details
+   */
+  getOccupancyCSVDetails(reportData) {
+    let csvData = '';
+
+    if (reportData.propertyMetrics) {
+      csvData += 'Property Performance\n';
+      csvData += 'Property,Total Units,Occupied,Vacant,Occupancy Rate,Rent Collected,Collection Rate\n';
+      reportData.propertyMetrics.forEach(property => {
+        csvData += `${property.propertyTitle},${property.totalUnits},${property.occupiedUnits},${property.vacantUnits},${property.occupancyRate.toFixed(2)},${property.rentCollected},${property.collectionRate.toFixed(2)}\n`;
+      });
+    }
+
+    return csvData;
+  }
+
+  /**
+   * Get agent performance CSV details
+   */
+  getAgentPerformanceCSVDetails(reportData) {
+    let csvData = '';
+
+    if (reportData.agentPerformance) {
+      csvData += 'Agent Performance\n';
+      csvData += 'Agent Name,Properties,Tenants,Rent Collected,Commissions Earned,Commission Rate\n';
+      reportData.agentPerformance.forEach(agent => {
+        csvData += `${agent.agentName},${agent.propertiesManaged},${agent.tenantsManaged},${agent.rentCollected},${agent.commissionsEarned},${agent.commissionRate}\n`;
+      });
+    }
+
+    return csvData;
+  }
+
+  /**
+   * Get maintenance CSV details
+   */
+  getMaintenanceCSVDetails(reportData) {
+    let csvData = '';
+
+    if (reportData.requests) {
+      csvData += 'Maintenance Requests\n';
+      csvData += 'Title,Category,Priority,Status,Property,Tenant,Created,Completed,Cost\n';
+      reportData.requests.forEach(request => {
+        csvData += `"${request.title}",${request.category},${request.priority},${request.status},"${request.propertyTitle}","${request.tenantName}",${request.createdAt},${request.completedDate || ''},${request.actualCost || request.estimatedCost || ''}\n`;
+      });
+    }
+
+    return csvData;
+  }
+
+  /**
+   * Get generic CSV details
+   */
+  getGenericCSVDetails(reportData) {
+    let csvData = '';
+
+    Object.entries(reportData).forEach(([key, value]) => {
+      if (key !== 'summary' && key !== 'period' && key !== 'generatedAt' && Array.isArray(value)) {
+        csvData += `${this.formatLabel(key)}\n`;
+        
+        if (value.length > 0 && typeof value[0] === 'object') {
+          const headers = Object.keys(value[0]);
+          csvData += headers.map(h => this.formatLabel(h)).join(',') + '\n';
+          
+          value.forEach(item => {
+            csvData += headers.map(h => {
+              const val = item[h];
+              return typeof val === 'string' && val.includes(',') ? `"${val}"` : val;
+            }).join(',') + '\n';
+          });
+        }
+        csvData += '\n';
+      }
+    });
+
+    return csvData;
+  }
+
+  /**
+   * Format report title
+   */
+  formatReportTitle(reportType) {
+    return reportType.split('-').map(word => 
+      word.charAt(0).toUpperCase() + word.slice(1)
+    ).join(' ');
+  }
+
+  /**
+   * Format label for display
+   */
+  formatLabel(key) {
+    return key.split(/(?=[A-Z])|_/).map(word => 
+      word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+    ).join(' ');
   }
 
   /**
