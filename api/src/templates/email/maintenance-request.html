@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Maintenance Request Received</title>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f4f4f4; }
+    .container { max-width: 600px; margin: 20px auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .header { background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%); color: white; padding: 30px; text-align: center; }
+    .header h1 { margin: 0; font-size: 28px; }
+    .content { padding: 30px; }
+    .status-box { background: #cffafe; border-left: 4px solid #06b6d4; padding: 15px; margin: 20px 0; border-radius: 4px; }
+    .details { background: #f9fafb; padding: 20px; border-radius: 6px; margin: 20px 0; }
+    .priority { font-weight: bold; padding: 4px 8px; border-radius: 4px; }
+    .priority-HIGH { color: #dc2626; background: #fee2e2; }
+    .priority-MEDIUM { color: #f59e0b; background: #fef3c7; }
+    .priority-LOW { color: #10b981; background: #d1fae5; }
+    .timeline { margin: 20px 0; }
+    .timeline-item { padding: 15px; border-left: 3px solid #06b6d4; margin-left: 20px; position: relative; }
+    .timeline-item:before { content: '●'; position: absolute; left: -9px; background: white; color: #06b6d4; font-size: 16px; }
+    .footer { background: #f9fafb; padding: 20px; text-align: center; color: #666; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🔧 Maintenance Request</h1>
+    </div>
+    
+    <div class="content">
+      <p>Dear <strong>{{tenantName}}</strong>,</p>
+      
+      <div class="status-box">
+        <p><strong>✅ Request Received!</strong> We've received your maintenance request and our team is on it.</p>
+      </div>
+      
+      <div class="details">
+        <h3 style="margin-top: 0; color: #06b6d4;">📋 Request Details</h3>
+        
+        <p><strong>Request ID:</strong> {{requestId}}<br>
+        <strong>Date Submitted:</strong> {{submittedDate}}<br>
+        <strong>Property:</strong> {{propertyName}}<br>
+        <strong>Unit:</strong> {{unitNumber}}<br>
+        <strong>Priority:</strong> <span class="priority">{{priority}}</span></p>
+        
+        <p><strong>Issue Description:</strong><br>
+        {{description}}</p>
+        
+        <p><strong>Category:</strong> {{category}}</p>
+      </div>
+      
+      <h3>⏱️ What Happens Next?</h3>
+      
+      <div class="timeline">
+        <div class="timeline-item">
+          <strong>Step 1: Review</strong><br>
+          Our team reviews your request (within 2 hours)
+        </div>
+        <div class="timeline-item">
+          <strong>Step 2: Schedule</strong><br>
+          We'll contact you to schedule a convenient time
+        </div>
+        <div class="timeline-item">
+          <strong>Step 3: Repair</strong><br>
+          Our technician will fix the issue
+        </div>
+        <div class="timeline-item">
+          <strong>Step 4: Follow-up</strong><br>
+          We'll ensure you're satisfied with the work
+        </div>
+      </div>
+      
+      <p><strong>Estimated Response Time:</strong> {{estimatedTime}}</p>
+      
+      <p><strong>📞 Need Urgent Assistance?</strong><br>
+      For emergencies (water leaks, electrical issues, security concerns), call us immediately at <strong>{{emergencyPhone}}</strong></p>
+      
+      <p>You can track the status of your request in your tenant portal or by replying to this email.</p>
+      
+      <p>Thank you for reporting this issue. We're committed to maintaining your home in excellent condition!</p>
+      
+      <p>Best regards,<br>
+      <strong>Haven Maintenance Team</strong></p>
+    </div>
+    
+    <div class="footer">
+      <p>&copy; 2025 Haven Property Management</p>
+      <p>Track your request: <a href="{{trackingUrl}}">{{trackingUrl}}</a></p>
+    </div>
+  </div>
+</body>
+</html>

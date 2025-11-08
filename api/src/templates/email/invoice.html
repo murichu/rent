@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Monthly Invoice</title>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f4f4f4; }
+    .container { max-width: 700px; margin: 20px auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .header { background: #1f2937; color: white; padding: 30px; }
+    .header h1 { margin: 0; font-size: 32px; }
+    .invoice-details { display: flex; justify-content: space-between; padding: 20px 30px; background: #f9fafb; }
+    .content { padding: 30px; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    th { background: #f3f4f6; padding: 12px; text-align: left; font-weight: bold; }
+    td { padding: 12px; border-bottom: 1px solid #e5e7eb; }
+    .total-row { background: #f9fafb; font-weight: bold; font-size: 18px; }
+    .button { display: inline-block; background: #2563eb; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
+    .footer { background: #f9fafb; padding: 20px 30px; color: #666; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>INVOICE</h1>
+      <p style="margin: 5px 0;">Haven Property Management</p>
+    </div>
+    
+    <div class="invoice-details">
+      <div>
+        <p><strong>Bill To:</strong><br>
+        {{tenantName}}<br>
+        {{propertyName}}<br>
+        Unit {{unitNumber}}</p>
+      </div>
+      <div style="text-align: right;">
+        <p><strong>Invoice #:</strong> {{invoiceNumber}}<br>
+        <strong>Date:</strong> {{invoiceDate}}<br>
+        <strong>Due Date:</strong> <span style="color: #ef4444;">{{dueDate}}</span></p>
+      </div>
+    </div>
+    
+    <div class="content">
+      <h3>Invoice Details</h3>
+      
+      <table>
+        <thead>
+          <tr>
+            <th>Description</th>
+            <th>Period</th>
+            <th style="text-align: right;">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Monthly Rent</td>
+            <td>{{billingPeriod}}</td>
+            <td style="text-align: right;">KES {{rentAmount}}</td>
+          </tr>
+          {{#if waterCharge}}
+          <tr>
+            <td>Water Charges</td>
+            <td>{{billingPeriod}}</td>
+            <td style="text-align: right;">KES {{waterCharge}}</td>
+          </tr>
+          {{/if}}
+          {{#if garbageCharge}}
+          <tr>
+            <td>Garbage Collection</td>
+            <td>{{billingPeriod}}</td>
+            <td style="text-align: right;">KES {{garbageCharge}}</td>
+          </tr>
+          {{/if}}
+          {{#if previousBalance}}
+          <tr>
+            <td>Previous Balance</td>
+            <td>-</td>
+            <td style="text-align: right; color: #ef4444;">KES {{previousBalance}}</td>
+          </tr>
+          {{/if}}
+          <tr class="total-row">
+            <td colspan="2">Total Amount Due</td>
+            <td style="text-align: right; color: #2563eb;">KES {{totalAmount}}</td>
+          </tr>
+        </tbody>
+      </table>
+      
+      <h3>Payment Instructions</h3>
+      
+      <p><strong>1. M-Pesa Payment</strong><br>
+      Paybill/Till: <strong>{{mpesaNumber}}</strong><br>
+      Account: <strong>{{accountNumber}}</strong><br>
+      Amount: <strong>KES {{totalAmount}}</strong></p>
+      
+      <p><strong>2. Bank Transfer</strong><br>
+      Bank: <strong>{{bankName}}</strong><br>
+      Account: <strong>{{bankAccount}}</strong><br>
+      Reference: <strong>{{invoiceNumber}}</strong></p>
+      
+      <div style="text-align: center;">
+        <a href="{{paymentUrl}}" class="button">Pay Online</a>
+      </div>
+      
+      <div style="background: #fef3c7; padding: 15px; border-radius: 6px; margin: 20px 0;">
+        <p style="margin: 0;"><strong>⚠️ Important:</strong> Payment must be received by {{dueDate}} to avoid late fees of KES {{lateFeeAmount}}.</p>
+      </div>
+      
+      <p><strong>Questions?</strong> Contact us at {{supportEmail}} or {{supportPhone}}</p>
+      
+      <p style="font-size: 12px; color: #666;">Thank you for your prompt payment. This invoice is computer-generated and does not require a signature.</p>
+    </div>
+    
+    <div class="footer">
+      <p>&copy; 2025 Haven Property Management. All rights reserved.</p>
+      <p>Invoice generated on {{generatedDate}}</p>
+    </div>
+  </div>
+</body>
+</html>

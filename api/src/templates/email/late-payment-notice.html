@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Late Payment Notice</title>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f4f4f4; }
+    .container { max-width: 600px; margin: 20px auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .header { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; padding: 30px; text-align: center; }
+    .header h1 { margin: 0; font-size: 28px; }
+    .content { padding: 30px; }
+    .alert-box { background: #fee2e2; border-left: 4px solid #ef4444; padding: 15px; margin: 20px 0; border-radius: 4px; }
+    .amount-due { font-size: 36px; font-weight: bold; color: #dc2626; text-align: center; margin: 20px 0; }
+    .penalty-box { background: #fef2f2; padding: 15px; border-radius: 6px; margin: 20px 0; }
+    .button { display: inline-block; background: #ef4444; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
+    .footer { background: #f9fafb; padding: 20px; text-align: center; color: #666; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>⚠️ Late Payment Notice</h1>
+    </div>
+    
+    <div class="content">
+      <p>Dear <strong>{{tenantName}}</strong>,</p>
+      
+      <div class="alert-box">
+        <p><strong>URGENT:</strong> Your rent payment is overdue. Immediate action is required to avoid further penalties.</p>
+      </div>
+      
+      <p><strong>Property:</strong> {{propertyName}}<br>
+      <strong>Unit:</strong> {{unitNumber}}<br>
+      <strong>Original Due Date:</strong> {{originalDueDate}}<br>
+      <strong>Days Overdue:</strong> <span style="color: #dc2626; font-weight: bold;">{{daysOverdue}} days</span></p>
+      
+      <div class="amount-due">
+        KES {{totalAmountDue}}
+      </div>
+      
+      <div class="penalty-box">
+        <h3 style="margin-top: 0; color: #dc2626;">💰 Amount Breakdown</h3>
+        <p>Original Rent: KES {{originalAmount}}<br>
+        Late Fee: KES {{lateFee}}<br>
+        <strong>Total Due: KES {{totalAmountDue}}</strong></p>
+      </div>
+      
+      <h3>⚠️ Important Information</h3>
+      <ul>
+        <li>Additional penalties may apply if payment is not received within {{gracePeriod}} days</li>
+        <li>Continued non-payment may result in lease termination</li>
+        <li>Your account may be reported to credit bureaus</li>
+        <li>Legal action may be initiated for recovery</li>
+      </ul>
+      
+      <h3>💳 Pay Immediately</h3>
+      <p><strong>M-Pesa:</strong> {{mpesaNumber}}<br>
+      <strong>Bank Transfer:</strong> {{bankAccount}}<br>
+      <strong>Reference:</strong> {{referenceNumber}}</p>
+      
+      <div style="text-align: center;">
+        <a href="{{paymentUrl}}" class="button">Pay Now</a>
+      </div>
+      
+      <h3>🤝 Need Help?</h3>
+      <p>If you're experiencing financial difficulties, please contact us immediately to discuss payment arrangements. We're here to help find a solution.</p>
+      
+      <p><strong>Contact:</strong> {{supportPhone}} or {{supportEmail}}</p>
+      
+      <p>Please treat this matter with urgency to avoid further complications.</p>
+      
+      <p>Regards,<br>
+      <strong>Haven Property Management</strong></p>
+    </div>
+    
+    <div class="footer">
+      <p>&copy; 2025 Haven Property Management</p>
+      <p>This is an official notice. Please respond immediately.</p>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Welcome to Haven Property Management</title>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f4f4f4; }
+    .container { max-width: 600px; margin: 20px auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .header { background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: white; padding: 30px; text-align: center; }
+    .header h1 { margin: 0; font-size: 28px; }
+    .content { padding: 30px; }
+    .info-box { background: #f9fafb; border-left: 4px solid #2563eb; padding: 15px; margin: 20px 0; border-radius: 4px; }
+    .info-box h3 { margin-top: 0; color: #2563eb; }
+    .button { display: inline-block; background: #2563eb; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
+    .footer { background: #f9fafb; padding: 20px; text-align: center; color: #666; font-size: 14px; }
+    .highlight { color: #2563eb; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🏠 Welcome to Haven!</h1>
+      <p>Your new home awaits</p>
+    </div>
+    
+    <div class="content">
+      <p>Dear <strong>{{tenantName}}</strong>,</p>
+      
+      <p>Welcome to <strong>{{propertyName}}</strong>! We're thrilled to have you as our new tenant.</p>
+      
+      <div class="info-box">
+        <h3>📋 Lease Details</h3>
+        <p><strong>Property:</strong> {{propertyName}}<br>
+        <strong>Unit:</strong> {{unitNumber}}<br>
+        <strong>Move-in Date:</strong> {{moveInDate}}<br>
+        <strong>Monthly Rent:</strong> KES {{monthlyRent}}<br>
+        <strong>Lease Duration:</strong> {{leaseDuration}}</p>
+      </div>
+      
+      <h3>🔑 What's Next?</h3>
+      <ul>
+        <li>Complete your move-in inspection</li>
+        <li>Set up your payment method</li>
+        <li>Review house rules and guidelines</li>
+        <li>Meet your property manager</li>
+      </ul>
+      
+      <h3>💳 Payment Information</h3>
+      <p>Your first rent payment of <span class="highlight">KES {{monthlyRent}}</span> is due on <span class="highlight">{{firstPaymentDate}}</span>.</p>
+      
+      <p>You can pay via:</p>
+      <ul>
+        <li>M-Pesa: Send to <strong>{{mpesaNumber}}</strong></li>
+        <li>Bank Transfer: Account <strong>{{bankAccount}}</strong></li>
+        <li>Online Portal: <a href="{{portalUrl}}">{{portalUrl}}</a></li>
+      </ul>
+      
+      <div style="text-align: center;">
+        <a href="{{portalUrl}}" class="button">Access Your Portal</a>
+      </div>
+      
+      <div class="info-box">
+        <h3>📞 Need Help?</h3>
+        <p><strong>Property Manager:</strong> {{managerName}}<br>
+        <strong>Phone:</strong> {{managerPhone}}<br>
+        <strong>Email:</strong> {{managerEmail}}</p>
+      </div>
+      
+      <p>We're here to make your stay comfortable and hassle-free. Don't hesitate to reach out if you need anything!</p>
+      
+      <p>Best regards,<br>
+      <strong>Haven Property Management Team</strong></p>
+    </div>
+    
+    <div class="footer">
+      <p>&copy; 2025 Haven Property Management. All rights reserved.</p>
+      <p>This is an automated message. Please do not reply to this email.</p>
+    </div>
+  </div>
+</body>
+</html>

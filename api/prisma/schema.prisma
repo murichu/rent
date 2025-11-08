@@ -1,0 +1,458 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum PropertyStatus {
+  AVAILABLE
+  OCCUPIED
+  MAINTENANCE
+  OFF_MARKET
+}
+
+enum PropertyType {
+  SINGLE_ROOM
+  DOUBLE_ROOM
+  BEDSITTER
+  ONE_BEDROOM
+  TWO_BEDROOM
+  THREE_BEDROOM
+  FOUR_BEDROOM
+  MAISONETTE
+  BUNGALOW
+  SERVANT_QUARTER
+  PENTHOUSE
+  TOWNHOUSE
+  VILLA
+  COMMERCIAL
+  OFFICE
+}
+
+enum PaymentMethod {
+  MPESA_C2B
+  MANUAL
+  BANK_TRANSFER
+  CASH
+  PESAPAL
+  CARD
+}
+
+enum InvoiceStatus {
+  PENDING
+  PARTIAL
+  PAID
+  OVERDUE
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+model Agency {
+  id         String     @id @default(auto()) @map("_id") @db.ObjectId
+  name       String
+  invoiceDayOfMonth Int @default(28)
+  dueDayOfMonth     Int @default(5)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  
+  // Relations
+  users      User[]
+  properties Property[]
+  tenants    Tenant[]
+  leases     Lease[]
+  payments   Payment[]
+  invoices   Invoice[]
+  mpesaTransactions MpesaTransaction[]
+  pesapalTransactions PesapalTransaction[]
+  agents          Agent[]
+  caretakers      Caretaker[]
+  expenses        Expense[]
+  auditLogs       AuditLog[]
+}
+
+model User {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         Role     @default(USER)
+  agencyId     String   @db.ObjectId
+  agency       Agency   @relation(fields: [agencyId], references: [id])
+  emailVerified Boolean @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  // Relations
+  refreshTokens RefreshToken[]
+  verificationTokens VerificationToken[]
+  passwordResetTokens PasswordResetToken[]
+  twoFactorSecret TwoFactorSecret?
+}
+
+model Property {
+  id         String         @id @default(auto()) @map("_id") @db.ObjectId
+  title      String
+  address    String
+  city       String?
+  state      String?
+  zip        String?
+  bedrooms   Int?
+  bathrooms  Float?
+  sizeSqFt   Int?
+  rentAmount Int?
+  status     PropertyStatus @default(AVAILABLE)
+  type       PropertyType
+  agencyId    String         @db.ObjectId
+  agency      Agency         @relation(fields: [agencyId], references: [id])
+  caretakerId String?        @db.ObjectId
+  caretaker   Caretaker?     @relation(fields: [caretakerId], references: [id])
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  
+  // Relations
+  leases      Lease[]
+  units       Unit[]
+  expenses    Expense[]
+
+  @@index([agencyId, status])
+}
+
+model Unit {
+  id         String     @id @default(auto()) @map("_id") @db.ObjectId
+  propertyId String     @db.ObjectId
+  property   Property   @relation(fields: [propertyId], references: [id])
+  unitNumber String
+  type       PropertyType
+  bedrooms   Int?
+  bathrooms  Float?
+  sizeSqFt   Int?
+  rentAmount Int
+  status     String     @default("VACANT") // VACANT, OCCUPIED, MAINTENANCE
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  
+  // Relations
+  leases     Lease[]
+}
+
+model Tenant {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  email     String?
+  phone     String?
+  agencyId  String   @db.ObjectId
+  agency    Agency   @relation(fields: [agencyId], references: [id])
+  averageRating Float @default(0)
+  isHighRisk    Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  leases    Lease[]
+
+  @@index([agencyId])
+}
+
+model Lease {
+  id                 String   @id @default(auto()) @map("_id") @db.ObjectId
+  propertyId         String?  @db.ObjectId
+  property           Property? @relation(fields: [propertyId], references: [id])
+  unitId             String?  @db.ObjectId
+  unit               Unit?    @relation(fields: [unitId], references: [id])
+  tenantId           String   @db.ObjectId
+  tenant             Tenant   @relation(fields: [tenantId], references: [id])
+  agencyId           String   @db.ObjectId
+  agency             Agency   @relation(fields: [agencyId], references: [id])
+  startDate          DateTime
+  endDate            DateTime?
+  rentAmount         Int
+  paymentDayOfMonth  Int
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  
+  // Relations
+  payments           Payment[]
+  invoices           Invoice[]
+  mpesaTransactions  MpesaTransaction[]
+  pesapalTransactions PesapalTransaction[]
+}
+
+model Invoice {
+  id          String        @id @default(auto()) @map("_id") @db.ObjectId
+  leaseId     String        @db.ObjectId
+  lease       Lease         @relation(fields: [leaseId], references: [id])
+  agencyId    String        @db.ObjectId
+  agency      Agency        @relation(fields: [agencyId], references: [id])
+  amount      Int
+  periodYear  Int
+  periodMonth Int
+  issuedAt    DateTime
+  dueAt       DateTime
+  status      InvoiceStatus @default(PENDING)
+  totalPaid   Int           @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  
+  // Relations
+  payments    Payment[]
+
+  @@index([status])
+  @@index([leaseId])
+  @@index([agencyId])
+}
+
+model Payment {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  leaseId   String   @db.ObjectId
+  lease     Lease    @relation(fields: [leaseId], references: [id])
+  amount    Int
+  paidAt    DateTime
+  method    PaymentMethod @default(MANUAL)
+  referenceNumber String?
+  notes     String?
+  invoiceId String?  @db.ObjectId
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id])
+  agencyId  String   @db.ObjectId
+  agency    Agency   @relation(fields: [agencyId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([agencyId])
+  @@index([leaseId])
+}
+
+// Authentication tokens
+model RefreshToken {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  token     String   @unique
+  userId    String   @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model VerificationToken {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  token     String   @unique
+  userId    String   @unique @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model PasswordResetToken {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  token     String   @unique
+  userId    String   @unique @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  used      Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model TwoFactorSecret {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String   @unique @db.ObjectId
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  secret      String?
+  enabled     Boolean  @default(false)
+  backupCodes String[] @default([])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// M-Pesa Daraja API Transactions (C2B STK Push)
+model MpesaTransaction {
+  id                   String    @id @default(auto()) @map("_id") @db.ObjectId
+  merchantRequestId    String
+  checkoutRequestId    String    @unique
+  phoneNumber          String
+  amount               Int
+  accountReference     String
+  transactionDesc      String?
+  status               String    @default("PENDING") // PENDING, SUCCESS, FAILED, CANCELLED
+  responseCode         String?
+  responseDescription  String?
+  mpesaReceiptNumber   String?
+  transactionDate      DateTime?
+  resultCode           String?
+  resultDescription    String?
+  leaseId              String?   @db.ObjectId
+  lease                Lease?    @relation(fields: [leaseId], references: [id])
+  agencyId             String?   @db.ObjectId
+  agency               Agency?   @relation(fields: [agencyId], references: [id])
+  createdAt            DateTime  @default(now())
+  completedAt          DateTime?
+  updatedAt            DateTime  @updatedAt
+
+  @@index([status])
+}
+
+// PesaPal Payment Transactions
+model PesapalTransaction {
+  id                    String    @id @default(auto()) @map("_id") @db.ObjectId
+  merchantReference     String    @unique // Unique merchant reference
+  orderTrackingId       String?   @unique // PesaPal order tracking ID
+  amount                Float
+  currency              String    @default("KES")
+  description           String?
+  customerEmail         String
+  customerPhone         String?
+  status                String    @default("PENDING") // PENDING, COMPLETED, FAILED, INVALID
+  paymentMethod         String?   // Card, Mobile Money, etc.
+  paymentAccount        String?   // Last 4 digits of card or phone
+  transactionDate       DateTime?
+  confirmationCode      String?   // PesaPal confirmation code
+  paymentStatusDescription String?
+  errorMessage          String?
+  callbackUrl           String?
+  leaseId               String?   @db.ObjectId
+  lease                 Lease?    @relation(fields: [leaseId], references: [id])
+  agencyId              String?   @db.ObjectId
+  agency                Agency?   @relation(fields: [agencyId], references: [id])
+  createdAt             DateTime  @default(now())
+  completedAt           DateTime?
+  updatedAt             DateTime  @updatedAt
+
+  @@index([status])
+}
+
+// Add these models to the end of schema.prisma
+
+// Agents - Property agents who bring in tenants
+model Agent {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  name            String
+  phone           String
+  email           String?
+  commissionRate  Float    @default(10) // Percentage
+  agencyId        String   @db.ObjectId
+  agency          Agency   @relation(fields: [agencyId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([agencyId])
+  @@index([phone])
+}
+
+// Caretakers - Property caretakers/managers
+model Caretaker {
+  id              String              @id @default(auto()) @map("_id") @db.ObjectId
+  name            String
+  phone           String
+  email           String?
+  idNumber        String?
+  paymentType     String              @default("SALARY") // SALARY, COMMISSION, MIXED
+  salaryAmount    Float?
+  commissionRate  Float               @default(0)
+  commissionType  String              @default("PERCENTAGE") // PERCENTAGE, FLAT_RATE
+  agencyId        String              @db.ObjectId
+  agency          Agency              @relation(fields: [agencyId], references: [id])
+  properties      Property[]
+  payments        CaretakerPayment[]
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  
+  @@index([agencyId])
+  @@index([phone])
+}
+
+// Caretaker Payments
+model CaretakerPayment {
+  id                String     @id @default(auto()) @map("_id") @db.ObjectId
+  caretakerId       String     @db.ObjectId
+  caretaker         Caretaker  @relation(fields: [caretakerId], references: [id])
+  agencyId          String     @db.ObjectId
+  amount            Float
+  paymentDate       DateTime   @default(now())
+  paymentPeriod     String     // e.g., "2024-01"
+  paymentType       String?    // SALARY, COMMISSION, MIXED
+  salaryAmount      Float?
+  commissionAmount  Float?
+  rentCollected     Float?
+  commissionRate    Float?
+  method            String     @default("MANUAL") // MPESA_C2B, MANUAL, BANK_TRANSFER, CASH
+  referenceNumber   String?
+  description       String?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  
+  @@index([caretakerId])
+  @@index([agencyId])
+  @@index([paymentPeriod])
+}
+
+// Expenses - Property and operational expenses
+model Expense {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  agencyId        String    @db.ObjectId
+  agency          Agency    @relation(fields: [agencyId], references: [id])
+  propertyId      String?   @db.ObjectId
+  property        Property? @relation(fields: [propertyId], references: [id])
+  category        String    // MAINTENANCE, UTILITIES, REPAIRS, INSURANCE, TAXES, SALARIES, MARKETING, OTHER
+  amount          Float
+  description     String
+  expenseDate     DateTime  @default(now())
+  vendor          String?
+  receiptNumber   String?
+  paymentMethod   String?   // CASH, BANK_TRANSFER, MPESA, CARD
+  isRecurring     Boolean   @default(false)
+  recurringPeriod String?   // MONTHLY, QUARTERLY, YEARLY
+  attachments     String[]  @default([])
+  notes           String?
+  createdBy       String?   @db.ObjectId
+  approvedBy      String?   @db.ObjectId
+  status          String    @default("PENDING") // PENDING, APPROVED, REJECTED, PAID
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@index([agencyId])
+  @@index([propertyId])
+  @@index([category])
+  @@index([expenseDate])
+  @@index([status])
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  VIEW
+  EXPORT
+  IMPORT
+  STATUS_CHANGE
+  PAYMENT
+  REFUND
+}
+
+model AuditLog {
+  id          String      @id @default(auto()) @map("_id") @db.ObjectId
+  agencyId    String      @db.ObjectId
+  agency      Agency      @relation(fields: [agencyId], references: [id])
+  userId      String      @db.ObjectId
+  userName    String      // Denormalized for quick access
+  userEmail   String      // Denormalized for quick access
+  action      AuditAction
+  entityType  String      // e.g., "Property", "Tenant", "Lease", "User"
+  entityId    String?     // ID of the affected entity
+  entityName  String?     // Name/title of the affected entity for display
+  description String      // Human-readable description
+  metadata    Json?       // Additional data (old values, new values, etc.)
+  ipAddress   String?
+  userAgent   String?
+  timestamp   DateTime    @default(now())
+  
+  @@index([agencyId])
+  @@index([userId])
+  @@index([action])
+  @@index([entityType])
+  @@index([timestamp])
+}

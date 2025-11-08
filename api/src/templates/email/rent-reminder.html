@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Rent Payment Reminder</title>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f4f4f4; }
+    .container { max-width: 600px; margin: 20px auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .header { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; padding: 30px; text-align: center; }
+    .header h1 { margin: 0; font-size: 28px; }
+    .content { padding: 30px; }
+    .alert-box { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0; border-radius: 4px; }
+    .amount { font-size: 32px; font-weight: bold; color: #d97706; text-align: center; margin: 20px 0; }
+    .button { display: inline-block; background: #f59e0b; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
+    .payment-methods { background: #f9fafb; padding: 20px; border-radius: 6px; margin: 20px 0; }
+    .footer { background: #f9fafb; padding: 20px; text-align: center; color: #666; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>⏰ Rent Payment Reminder</h1>
+    </div>
+    
+    <div class="content">
+      <p>Dear <strong>{{tenantName}}</strong>,</p>
+      
+      <div class="alert-box">
+        <p><strong>⚠️ Friendly Reminder:</strong> Your rent payment is due soon!</p>
+      </div>
+      
+      <p><strong>Property:</strong> {{propertyName}}<br>
+      <strong>Unit:</strong> {{unitNumber}}<br>
+      <strong>Due Date:</strong> <span style="color: #d97706; font-weight: bold;">{{dueDate}}</span></p>
+      
+      <div class="amount">
+        KES {{amount}}
+      </div>
+      
+      <div class="payment-methods">
+        <h3>💳 Payment Methods</h3>
+        
+        <p><strong>1. M-Pesa (Instant)</strong><br>
+        Send to: <strong>{{mpesaNumber}}</strong><br>
+        Reference: <strong>{{referenceNumber}}</strong></p>
+        
+        <p><strong>2. Bank Transfer</strong><br>
+        Account: <strong>{{bankAccount}}</strong><br>
+        Bank: <strong>{{bankName}}</strong></p>
+        
+        <p><strong>3. Online Portal</strong><br>
+        <a href="{{paymentUrl}}">Click here to pay online</a></p>
+      </div>
+      
+      <div style="text-align: center;">
+        <a href="{{paymentUrl}}" class="button">Pay Now</a>
+      </div>
+      
+      <p><strong>Note:</strong> Late payments may incur additional charges. Please ensure payment is made by the due date.</p>
+      
+      <p>If you've already made this payment, please disregard this reminder.</p>
+      
+      <p>Thank you for your prompt attention!</p>
+      
+      <p>Best regards,<br>
+      <strong>Haven Property Management</strong></p>
+    </div>
+    
+    <div class="footer">
+      <p>&copy; 2025 Haven Property Management</p>
+      <p>Questions? Contact us at {{supportEmail}} or {{supportPhone}}</p>
+    </div>
+  </div>
+</body>
+</html>

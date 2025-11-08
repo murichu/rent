@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Lease Expiry Notice</title>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f4f4f4; }
+    .container { max-width: 600px; margin: 20px auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .header { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white; padding: 30px; text-align: center; }
+    .header h1 { margin: 0; font-size: 28px; }
+    .content { padding: 30px; }
+    .info-box { background: #f5f3ff; border-left: 4px solid #8b5cf6; padding: 15px; margin: 20px 0; border-radius: 4px; }
+    .options { background: #f9fafb; padding: 20px; border-radius: 6px; margin: 20px 0; }
+    .option { padding: 15px; margin: 10px 0; border: 2px solid #e5e7eb; border-radius: 6px; }
+    .option h4 { margin: 0 0 10px 0; color: #8b5cf6; }
+    .button { display: inline-block; background: #8b5cf6; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; margin: 10px 5px; }
+    .footer { background: #f9fafb; padding: 20px; text-align: center; color: #666; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>📅 Lease Expiry Notice</h1>
+    </div>
+    
+    <div class="content">
+      <p>Dear <strong>{{tenantName}}</strong>,</p>
+      
+      <div class="info-box">
+        <p><strong>📢 Important Notice:</strong> Your lease agreement is approaching its end date.</p>
+      </div>
+      
+      <p><strong>Property:</strong> {{propertyName}}<br>
+      <strong>Unit:</strong> {{unitNumber}}<br>
+      <strong>Lease End Date:</strong> <span style="color: #8b5cf6; font-weight: bold;">{{leaseEndDate}}</span><br>
+      <strong>Days Remaining:</strong> {{daysRemaining}} days</p>
+      
+      <h3>🤔 What are your plans?</h3>
+      
+      <div class="options">
+        <div class="option">
+          <h4>✅ Option 1: Renew Your Lease</h4>
+          <p>Continue living in your current unit with a new lease agreement.</p>
+          <ul>
+            <li>Same great location</li>
+            <li>Flexible terms available</li>
+            <li>Priority renewal rate</li>
+          </ul>
+        </div>
+        
+        <div class="option">
+          <h4>🏠 Option 2: Move to Another Unit</h4>
+          <p>Explore other available units in our properties.</p>
+          <ul>
+            <li>Different sizes available</li>
+            <li>Various locations</li>
+            <li>No application fees for existing tenants</li>
+          </ul>
+        </div>
+        
+        <div class="option">
+          <h4>👋 Option 3: Move Out</h4>
+          <p>If you're planning to move out, please let us know.</p>
+          <ul>
+            <li>30-day notice required</li>
+            <li>Schedule move-out inspection</li>
+            <li>Security deposit refund process</li>
+          </ul>
+        </div>
+      </div>
+      
+      <div style="text-align: center;">
+        <a href="{{renewUrl}}" class="button">Renew Lease</a>
+        <a href="{{contactUrl}}" class="button" style="background: #6b7280;">Contact Us</a>
+      </div>
+      
+      <p><strong>⏰ Action Required:</strong> Please respond by {{responseDeadline}} to avoid any service interruption.</p>
+      
+      <p>We value having you as our tenant and would love to continue our relationship. If you have any questions or need assistance, please don't hesitate to reach out.</p>
+      
+      <p>Best regards,<br>
+      <strong>Haven Property Management</strong></p>
+    </div>
+    
+    <div class="footer">
+      <p>&copy; 2025 Haven Property Management</p>
+      <p>Contact: {{supportEmail}} | {{supportPhone}}</p>
+    </div>
+  </div>
+</body>
+</html>
