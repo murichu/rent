@@ -1,0 +1,11 @@
+{
+  "testType": "benchmark",
+  "timestamp": "2025-11-10T07:07:00.456Z",
+  "historicalDataPoints": 0,
+  "regressions": [],
+  "summary": {
+    "totalRegressions": 0,
+    "criticalRegressions": 0,
+    "affectedMetrics": []
+  }
+}
