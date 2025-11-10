@@ -523,7 +523,7 @@ class ToastService {
    */
   async reportError(toast, errorDetails = {}) {
     try {
-      const { default: apiClient } = await import("../lib/axios");
+      const { apiClient } = await import("../config/api");
 
       await apiClient.post("/errors/frontend", {
         type: "user_reported_error",

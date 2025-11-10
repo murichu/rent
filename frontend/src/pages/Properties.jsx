@@ -1,123 +1,168 @@
-import { useEffect, useState } from 'react'
-import { Plus, Search, MapPin, Edit, Trash2, X, Filter, SlidersHorizontal, Grid, List } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
-import PropertyGrid from '@/components/PropertyGrid'
-import PropertyCard from '@/components/PropertyCard'
-import { PropertyFormModal } from '@/components/ui/form-modal'
-import axios from 'axios'
+import { useEffect, useState } from "react";
+import {
+  Plus,
+  Search,
+  MapPin,
+  Edit,
+  Trash2,
+  X,
+  Filter,
+  SlidersHorizontal,
+  Grid,
+  List,
+} from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import PropertyGrid from "@/components/PropertyGrid";
+import PropertyCard from "@/components/PropertyCard";
+import { PropertyFormModal } from "@/components/ui/form-modal";
+import axios from "axios";
 
 const Properties = () => {
-  const [properties, setProperties] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState('')
-  const [viewMode, setViewMode] = useState('grid')
-  const [sortBy, setSortBy] = useState('name')
-  const [sortOrder, setSortOrder] = useState('asc')
-  const [filterType, setFilterType] = useState('all')
-  const [filterStatus, setFilterStatus] = useState('all')
-  const [showFilters, setShowFilters] = useState(false)
-  const [showModal, setShowModal] = useState(false)
-  const [editingProperty, setEditingProperty] = useState(null)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
-  const [submitLoading, setSubmitLoading] = useState(false)
+  const [properties, setProperties] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [viewMode, setViewMode] = useState("grid");
+  const [sortBy, setSortBy] = useState("name");
+  const [sortOrder, setSortOrder] = useState("asc");
+  const [filterType, setFilterType] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [showFilters, setShowFilters] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [editingProperty, setEditingProperty] = useState(null);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [submitLoading, setSubmitLoading] = useState(false);
 
   useEffect(() => {
-    fetchProperties()
-  }, [])
+    fetchProperties();
+  }, []);
 
   const fetchProperties = async () => {
     try {
-      const token = localStorage.getItem('token')
-      const response = await axios.get('/properties', {
+      const token = localStorage.getItem("token");
+      const response = await axios.get("/properties", {
         headers: { Authorization: `Bearer ${token}` },
-      })
-      setProperties(response.data.data || [])
+      });
+
+      // Handle nested response structure: response.data.data.properties
+      let propertiesData = [];
+      if (response.data) {
+        // Check if data is nested (response.data.data.properties)
+        if (response.data.data && response.data.data.properties) {
+          propertiesData = response.data.data.properties;
+        }
+        // Check if properties is at top level (response.data.properties)
+        else if (response.data.properties) {
+          propertiesData = response.data.properties;
+        }
+        // Check if data is direct array (response.data.data)
+        else if (Array.isArray(response.data.data)) {
+          propertiesData = response.data.data;
+        }
+        // Check if data is direct array (response.data)
+        else if (Array.isArray(response.data)) {
+          propertiesData = response.data;
+        }
+      }
+
+      setProperties(Array.isArray(propertiesData) ? propertiesData : []);
     } catch (error) {
-      console.error('Error fetching properties:', error)
-      setProperties([])
-      setError('Failed to load properties')
+      console.error("Error fetching properties:", error);
+      setProperties([]);
+      setError("Failed to load properties");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleOpenModal = (property = null) => {
-    setEditingProperty(property)
-    setError('')
-    setShowModal(true)
-  }
+    setEditingProperty(property);
+    setError("");
+    setShowModal(true);
+  };
 
   const handleCloseModal = () => {
-    setShowModal(false)
-    setEditingProperty(null)
-    setError('')
-  }
+    setShowModal(false);
+    setEditingProperty(null);
+    setError("");
+  };
 
   const handleSubmit = async (formData) => {
-    setError('')
-    setSubmitLoading(true)
-    
+    setError("");
+    setSubmitLoading(true);
+
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem("token");
       const payload = {
         ...formData,
-        totalUnits: formData.totalUnits ? parseInt(formData.totalUnits) : undefined
-      }
+        totalUnits: formData.totalUnits
+          ? parseInt(formData.totalUnits)
+          : undefined,
+      };
 
       if (editingProperty) {
         await axios.put(`/properties/${editingProperty.id}`, payload, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        setSuccess('Property updated successfully')
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setSuccess("Property updated successfully");
       } else {
-        await axios.post('/properties', payload, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        setSuccess('Property created successfully')
+        await axios.post("/properties", payload, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setSuccess("Property created successfully");
       }
 
-      handleCloseModal()
-      fetchProperties()
-      setTimeout(() => setSuccess(''), 3000)
+      handleCloseModal();
+      fetchProperties();
+      setTimeout(() => setSuccess(""), 3000);
     } catch (error) {
-      console.error('Error saving property:', error)
-      setError(error.response?.data?.error || 'Failed to save property')
-      throw error // Re-throw to let the modal handle it
+      console.error("Error saving property:", error);
+      setError(error.response?.data?.error || "Failed to save property");
+      throw error; // Re-throw to let the modal handle it
     } finally {
-      setSubmitLoading(false)
+      setSubmitLoading(false);
     }
-  }
+  };
 
   const handleDelete = async (property) => {
-    if (!window.confirm(`Are you sure you want to delete "${property.name}"? This action cannot be undone.`)) {
-      return
+    if (
+      !window.confirm(
+        `Are you sure you want to delete "${property.name}"? This action cannot be undone.`
+      )
+    ) {
+      return;
     }
 
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem("token");
       await axios.delete(`/properties/${property.id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      setSuccess('Property deleted successfully')
-      fetchProperties()
-      setTimeout(() => setSuccess(''), 3000)
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setSuccess("Property deleted successfully");
+      fetchProperties();
+      setTimeout(() => setSuccess(""), 3000);
     } catch (error) {
-      console.error('Error deleting property:', error)
-      setError(error.response?.data?.error || 'Failed to delete property')
-      setTimeout(() => setError(''), 3000)
+      console.error("Error deleting property:", error);
+      setError(error.response?.data?.error || "Failed to delete property");
+      setTimeout(() => setError(""), 3000);
     }
-  }
+  };
 
   // Transform properties data to match PropertyCard expectations
-  const transformedProperties = properties.map(property => ({
+  const transformedProperties = properties.map((property) => ({
     ...property,
     location: property.location || property.address,
     price: property.rent || property.price,
-    currency: 'KSh',
+    currency: "KSh",
     images: property.images || [],
     amenities: property.amenities || [],
     bedrooms: property.bedrooms,
@@ -125,75 +170,80 @@ const Properties = () => {
     area: property.area,
     rating: property.rating,
     featured: property.featured || false,
-    isFavorited: property.isFavorited || false
-  }))
+    isFavorited: property.isFavorited || false,
+  }));
 
   // Filter and sort properties
   const filteredAndSortedProperties = transformedProperties
     .filter((property) => {
-      const matchesSearch = property.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      const matchesSearch =
+        property.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         property.location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        property.address?.toLowerCase().includes(searchTerm.toLowerCase())
-      
-      const matchesType = filterType === 'all' || property.type?.toLowerCase() === filterType.toLowerCase()
-      const matchesStatus = filterStatus === 'all' || property.status?.toLowerCase() === filterStatus.toLowerCase()
-      
-      return matchesSearch && matchesType && matchesStatus
+        property.address?.toLowerCase().includes(searchTerm.toLowerCase());
+
+      const matchesType =
+        filterType === "all" ||
+        property.type?.toLowerCase() === filterType.toLowerCase();
+      const matchesStatus =
+        filterStatus === "all" ||
+        property.status?.toLowerCase() === filterStatus.toLowerCase();
+
+      return matchesSearch && matchesType && matchesStatus;
     })
     .sort((a, b) => {
-      let aValue = a[sortBy]
-      let bValue = b[sortBy]
-      
+      let aValue = a[sortBy];
+      let bValue = b[sortBy];
+
       // Handle different data types
-      if (sortBy === 'price' || sortBy === 'rent') {
-        aValue = parseFloat(aValue) || 0
-        bValue = parseFloat(bValue) || 0
-      } else if (typeof aValue === 'string') {
-        aValue = aValue.toLowerCase()
-        bValue = bValue?.toLowerCase() || ''
+      if (sortBy === "price" || sortBy === "rent") {
+        aValue = parseFloat(aValue) || 0;
+        bValue = parseFloat(bValue) || 0;
+      } else if (typeof aValue === "string") {
+        aValue = aValue.toLowerCase();
+        bValue = bValue?.toLowerCase() || "";
       }
-      
-      if (sortOrder === 'asc') {
-        return aValue > bValue ? 1 : -1
+
+      if (sortOrder === "asc") {
+        return aValue > bValue ? 1 : -1;
       } else {
-        return aValue < bValue ? 1 : -1
+        return aValue < bValue ? 1 : -1;
       }
-    })
+    });
 
   const handlePropertySelect = (propertyId) => {
-    console.log('Selected property:', propertyId)
+    console.log("Selected property:", propertyId);
     // Navigate to property details or open modal
-  }
+  };
 
   const handlePropertyFavorite = (propertyId, isFavorited) => {
-    console.log('Favorite toggled:', propertyId, isFavorited)
+    console.log("Favorite toggled:", propertyId, isFavorited);
     // Update property favorite status
-    setProperties(prev => prev.map(prop => 
-      prop.id === propertyId 
-        ? { ...prop, isFavorited } 
-        : prop
-    ))
-  }
+    setProperties((prev) =>
+      prev.map((prop) =>
+        prop.id === propertyId ? { ...prop, isFavorited } : prop
+      )
+    );
+  };
 
   const getStatusColor = (status) => {
     switch (status?.toLowerCase()) {
-      case 'occupied':
-        return 'default'
-      case 'vacant':
-        return 'secondary'
-      case 'maintenance':
-        return 'destructive'
+      case "occupied":
+        return "default";
+      case "vacant":
+        return "secondary";
+      case "maintenance":
+        return "destructive";
       default:
-        return 'outline'
+        return "outline";
     }
-  }
+  };
 
   if (loading) {
     return (
       <div className="flex h-96 items-center justify-center">
         <div className="text-muted-foreground">Loading properties...</div>
       </div>
-    )
+    );
   }
 
   return (
@@ -228,15 +278,18 @@ const Properties = () => {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={() => setShowFilters(!showFilters)}
             className="flex items-center gap-2"
           >
             <SlidersHorizontal className="h-4 w-4" />
             Filters
           </Button>
-          <Button onClick={() => handleOpenModal()} className="flex items-center gap-2">
+          <Button
+            onClick={() => handleOpenModal()}
+            className="flex items-center gap-2"
+          >
             <Plus className="h-4 w-4" />
             Add Property
           </Button>
@@ -330,37 +383,48 @@ const Properties = () => {
             </div>
 
             {/* Active Filters */}
-            {(filterType !== 'all' || filterStatus !== 'all' || searchTerm) && (
+            {(filterType !== "all" || filterStatus !== "all" || searchTerm) && (
               <div className="mt-4 pt-4 border-t border-gray-200">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-medium text-gray-700">Active filters:</span>
+                  <span className="text-sm font-medium text-gray-700">
+                    Active filters:
+                  </span>
                   {searchTerm && (
-                    <Badge variant="secondary" className="flex items-center gap-1">
-                      Search: "{searchTerm}"
+                    <Badge
+                      variant="secondary"
+                      className="flex items-center gap-1"
+                    >
+                      Search: "{searchTerm}&quot;
                       <button
-                        onClick={() => setSearchTerm('')}
+                        onClick={() => setSearchTerm("")}
                         className="ml-1 hover:text-red-600"
                       >
                         <X className="h-3 w-3" />
                       </button>
                     </Badge>
                   )}
-                  {filterType !== 'all' && (
-                    <Badge variant="secondary" className="flex items-center gap-1">
+                  {filterType !== "all" && (
+                    <Badge
+                      variant="secondary"
+                      className="flex items-center gap-1"
+                    >
                       Type: {filterType}
                       <button
-                        onClick={() => setFilterType('all')}
+                        onClick={() => setFilterType("all")}
                         className="ml-1 hover:text-red-600"
                       >
                         <X className="h-3 w-3" />
                       </button>
                     </Badge>
                   )}
-                  {filterStatus !== 'all' && (
-                    <Badge variant="secondary" className="flex items-center gap-1">
+                  {filterStatus !== "all" && (
+                    <Badge
+                      variant="secondary"
+                      className="flex items-center gap-1"
+                    >
                       Status: {filterStatus}
                       <button
-                        onClick={() => setFilterStatus('all')}
+                        onClick={() => setFilterStatus("all")}
                         className="ml-1 hover:text-red-600"
                       >
                         <X className="h-3 w-3" />
@@ -371,9 +435,9 @@ const Properties = () => {
                     variant="ghost"
                     size="sm"
                     onClick={() => {
-                      setSearchTerm('')
-                      setFilterType('all')
-                      setFilterStatus('all')
+                      setSearchTerm("");
+                      setFilterType("all");
+                      setFilterStatus("all");
                     }}
                     className="text-gray-600 hover:text-gray-900"
                   >
@@ -388,30 +452,27 @@ const Properties = () => {
         {/* Results Summary and View Toggle */}
         <div className="flex items-center justify-between">
           <div className="text-sm text-gray-600">
-            Showing {filteredAndSortedProperties.length} of {properties.length} properties
+            Showing {filteredAndSortedProperties.length} of {properties.length}{" "}
+            properties
           </div>
           <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
             <Button
-              variant={viewMode === 'grid' ? 'default' : 'ghost'}
+              variant={viewMode === "grid" ? "default" : "ghost"}
               size="sm"
-              onClick={() => setViewMode('grid')}
+              onClick={() => setViewMode("grid")}
               className={`h-8 px-3 ${
-                viewMode === 'grid' 
-                  ? 'bg-white shadow-sm' 
-                  : 'hover:bg-gray-200'
+                viewMode === "grid" ? "bg-white shadow-sm" : "hover:bg-gray-200"
               }`}
             >
               <Grid className="h-4 w-4" />
               <span className="ml-1 hidden sm:inline">Grid</span>
             </Button>
             <Button
-              variant={viewMode === 'list' ? 'default' : 'ghost'}
+              variant={viewMode === "list" ? "default" : "ghost"}
               size="sm"
-              onClick={() => setViewMode('list')}
+              onClick={() => setViewMode("list")}
               className={`h-8 px-3 ${
-                viewMode === 'list' 
-                  ? 'bg-white shadow-sm' 
-                  : 'hover:bg-gray-200'
+                viewMode === "list" ? "bg-white shadow-sm" : "hover:bg-gray-200"
               }`}
             >
               <List className="h-4 w-4" />
@@ -439,25 +500,23 @@ const Properties = () => {
             <MapPin className="h-10 w-10 text-gray-400" />
           </div>
           <h3 className="text-xl font-semibold text-gray-900 mb-2">
-            {searchTerm || filterType !== 'all' || filterStatus !== 'all' 
-              ? 'No properties match your criteria' 
-              : 'No properties yet'
-            }
+            {searchTerm || filterType !== "all" || filterStatus !== "all"
+              ? "No properties match your criteria"
+              : "No properties yet"}
           </h3>
           <p className="text-gray-600 mb-8 max-w-md">
-            {searchTerm || filterType !== 'all' || filterStatus !== 'all'
-              ? 'Try adjusting your search terms or filters to find what you\'re looking for.'
-              : 'Get started by adding your first property to the system.'
-            }
+            {searchTerm || filterType !== "all" || filterStatus !== "all"
+              ? "Try adjusting your search terms or filters to find what you're looking for."
+              : "Get started by adding your first property to the system."}
           </p>
           <div className="flex gap-3">
-            {(searchTerm || filterType !== 'all' || filterStatus !== 'all') && (
-              <Button 
+            {(searchTerm || filterType !== "all" || filterStatus !== "all") && (
+              <Button
                 variant="outline"
                 onClick={() => {
-                  setSearchTerm('')
-                  setFilterType('all')
-                  setFilterStatus('all')
+                  setSearchTerm("");
+                  setFilterType("all");
+                  setFilterStatus("all");
                 }}
               >
                 Clear Filters
@@ -480,7 +539,7 @@ const Properties = () => {
         loading={submitLoading}
       />
     </div>
-  )
-}
+  );
+};
 
-export default Properties
+export default Properties;

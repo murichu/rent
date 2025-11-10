@@ -1,16 +1,21 @@
 import { useEffect, useState } from "react";
-import { Plus, Search, Mail, Phone, Edit, Trash2, X } from "lucide-react";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  Users,
+  Search,
+  Plus,
+  Mail,
+  Phone,
+  Calendar,
+  AlertCircle,
+  Star,
+  Filter,
+  X,
+} from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import axios from "axios";
+import { apiClient } from "../config/api";
 
 const Tenants = () => {
   const [tenants, setTenants] = useState([]);
@@ -20,6 +25,9 @@ const Tenants = () => {
   const [editingTenant, setEditingTenant] = useState(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [filterRisk, setFilterRisk] = useState("all");
+  const [showFilters, setShowFilters] = useState(false);
+
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -32,15 +40,16 @@ const Tenants = () => {
 
   const fetchTenants = async () => {
     try {
-      const token = localStorage.getItem("token");
-      const response = await axios.get("/tenants", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = response.data.data || response.data.items || response.data;
-      setTenants(Array.isArray(data) ? data : []);
+      const response = await apiClient.get("/tenants");
+      const tenantsData =
+        response.data?.data?.tenants ||
+        response.data?.tenants ||
+        response.data?.data ||
+        response.data ||
+        [];
+      setTenants(Array.isArray(tenantsData) ? tenantsData : []);
     } catch (error) {
       console.error("Error fetching tenants:", error);
-      setTenants([]);
       setError("Failed to load tenants");
     } finally {
       setLoading(false);
@@ -57,11 +66,7 @@ const Tenants = () => {
       });
     } else {
       setEditingTenant(null);
-      setFormData({
-        name: "",
-        email: "",
-        phone: "",
-      });
+      setFormData({ name: "", email: "", phone: "" });
     }
     setError("");
     setShowModal(true);
@@ -70,27 +75,22 @@ const Tenants = () => {
   const handleCloseModal = () => {
     setShowModal(false);
     setEditingTenant(null);
+    setFormData({ name: "", email: "", phone: "" });
     setError("");
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    try {
-      const token = localStorage.getItem("token");
 
+    try {
       if (editingTenant) {
-        await axios.put(`/tenants/${editingTenant.id}`, formData, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        await apiClient.put(`/tenants/${editingTenant.id}`, formData);
         setSuccess("Tenant updated successfully");
       } else {
-        await axios.post("/tenants", formData, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        await apiClient.post("/tenants", formData);
         setSuccess("Tenant created successfully");
       }
-
       handleCloseModal();
       fetchTenants();
       setTimeout(() => setSuccess(""), 3000);
@@ -101,19 +101,12 @@ const Tenants = () => {
   };
 
   const handleDelete = async (tenant) => {
-    if (
-      !window.confirm(
-        `Are you sure you want to delete "${tenant.name}"? This action cannot be undone.`
-      )
-    ) {
+    if (!window.confirm(`Are you sure you want to delete "${tenant.name}"?`)) {
       return;
     }
 
     try {
-      const token = localStorage.getItem("token");
-      await axios.delete(`/api/tenants/${tenant.id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await apiClient.delete(`/tenants/${tenant.id}`);
       setSuccess("Tenant deleted successfully");
       fetchTenants();
       setTimeout(() => setSuccess(""), 3000);
@@ -124,25 +117,19 @@ const Tenants = () => {
     }
   };
 
-  const filteredTenants = tenants.filter(
-    (tenant) =>
+  const filteredTenants = tenants.filter((tenant) => {
+    const matchesSearch =
       tenant.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       tenant.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      tenant.phone?.includes(searchTerm)
-  );
+      tenant.phone?.toLowerCase().includes(searchTerm.toLowerCase());
 
-  const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
-      case "active":
-        return "default";
-      case "inactive":
-        return "secondary";
-      case "pending":
-        return "outline";
-      default:
-        return "outline";
-    }
-  };
+    const matchesRisk =
+      filterRisk === "all" ||
+      (filterRisk === "high" && tenant.isHighRisk) ||
+      (filterRisk === "low" && !tenant.isHighRisk);
+
+    return matchesSearch && matchesRisk;
+  });
 
   if (loading) {
     return (
@@ -153,7 +140,7 @@ const Tenants = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {success && (
         <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg">
           {success}
@@ -165,101 +152,132 @@ const Tenants = () => {
           {error}
         </div>
       )}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Tenants</h1>
-          <p className="text-muted-foreground">
-            Manage your tenant information
+
+      <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-2">
+          <h1 className="text-4xl font-bold tracking-tight text-gray-900">
+            Tenants
+          </h1>
+          <p className="text-lg text-gray-600">
+            Manage your tenant relationships
           </p>
+          <div className="flex items-center gap-4 text-sm text-gray-500">
+            <span>{filteredTenants.length} tenants</span>
+          </div>
         </div>
-        <Button onClick={() => handleOpenModal()}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Tenant
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            onClick={() => setShowFilters(!showFilters)}
+          >
+            <Filter className="h-4 w-4 mr-2" />
+            Filters
+          </Button>
+          <Button onClick={() => handleOpenModal()}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Tenant
+          </Button>
+        </div>
       </div>
 
-      <div className="flex items-center space-x-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <div className="space-y-4">
+        <div className="relative max-w-2xl">
+          <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
           <Input
-            placeholder="Search tenants..."
+            placeholder="Search tenants by name, email, or phone..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
+            className="pl-12 h-12"
           />
         </div>
+
+        {showFilters && (
+          <Card className="p-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Risk Level
+                </label>
+                <select
+                  value={filterRisk}
+                  onChange={(e) => setFilterRisk(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                >
+                  <option value="all">All Tenants</option>
+                  <option value="low">Low Risk</option>
+                  <option value="high">High Risk</option>
+                </select>
+              </div>
+            </div>
+          </Card>
+        )}
       </div>
 
-      <div className="grid gap-4">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {filteredTenants.map((tenant) => (
-          <Card key={tenant.id} className="hover:shadow-md transition-shadow">
+          <Card key={tenant.id} className="hover:shadow-lg transition-shadow">
             <CardHeader>
               <div className="flex items-start justify-between">
-                <div className="space-y-1">
-                  <CardTitle className="text-xl">{tenant.name}</CardTitle>
-                  <CardDescription>
-                    Unit: {tenant.unit || "Not assigned"}
-                  </CardDescription>
+                <div className="flex items-center space-x-3">
+                  <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
+                    <Users className="h-6 w-6 text-blue-600" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg">{tenant.name}</CardTitle>
+                    <div className="flex items-center gap-2 mt-1">
+                      {tenant.averageRating > 0 && (
+                        <div className="flex items-center">
+                          <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                          <span className="text-sm text-gray-600 ml-1">
+                            {tenant.averageRating.toFixed(1)}
+                          </span>
+                        </div>
+                      )}
+                      {tenant.isHighRisk && (
+                        <Badge variant="destructive" className="text-xs">
+                          <AlertCircle className="h-3 w-3 mr-1" />
+                          High Risk
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <Badge variant={getStatusColor(tenant.status)}>
-                  {tenant.status || "N/A"}
-                </Badge>
               </div>
             </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-3">
-                  <div className="flex items-center text-sm">
-                    <Mail className="mr-2 h-4 w-4 text-muted-foreground" />
-                    <span>{tenant.email || "N/A"}</span>
-                  </div>
-                  <div className="flex items-center text-sm">
-                    <Phone className="mr-2 h-4 w-4 text-muted-foreground" />
-                    <span>{tenant.phone || "N/A"}</span>
-                  </div>
+            <CardContent className="space-y-3">
+              {tenant.email && (
+                <div className="flex items-center text-sm text-gray-600">
+                  <Mail className="h-4 w-4 mr-2" />
+                  {tenant.email}
                 </div>
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Lease Start:</span>
-                    <span className="font-medium">
-                      {tenant.lease_start
-                        ? new Date(tenant.lease_start).toLocaleDateString()
-                        : "N/A"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Lease End:</span>
-                    <span className="font-medium">
-                      {tenant.lease_end
-                        ? new Date(tenant.lease_end).toLocaleDateString()
-                        : "N/A"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Monthly Rent:</span>
-                    <span className="font-medium">
-                      KSh {parseFloat(tenant.rent || 0).toLocaleString()}
-                    </span>
-                  </div>
+              )}
+              {tenant.phone && (
+                <div className="flex items-center text-sm text-gray-600">
+                  <Phone className="h-4 w-4 mr-2" />
+                  {tenant.phone}
                 </div>
+              )}
+              <div className="flex items-center text-sm text-gray-600">
+                <Calendar className="h-4 w-4 mr-2" />
+                Joined {new Date(tenant.createdAt).toLocaleDateString()}
               </div>
-              <div className="mt-4 flex gap-2">
+
+              <div className="flex gap-2 pt-4">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="flex-1"
                   onClick={() => handleOpenModal(tenant)}
+                  className="flex-1"
                 >
-                  <Edit className="mr-1 h-3 w-3" />
                   Edit
                 </Button>
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
                   onClick={() => handleDelete(tenant)}
-                  className="text-red-600 hover:text-red-700"
+                  className="flex-1 text-red-600 hover:text-red-700"
                 >
-                  <Trash2 className="h-3 w-3" />
+                  Delete
                 </Button>
               </div>
             </CardContent>
@@ -268,96 +286,98 @@ const Tenants = () => {
       </div>
 
       {filteredTenants.length === 0 && (
-        <div className="flex h-64 items-center justify-center">
-          <div className="text-center">
-            <p className="text-muted-foreground">No tenants found</p>
-            <Button className="mt-4" onClick={() => handleOpenModal()}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Your First Tenant
-            </Button>
-          </div>
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Users className="h-16 w-16 text-gray-400 mb-4" />
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">
+            No tenants found
+          </h3>
+          <p className="text-gray-600 mb-8">
+            {searchTerm || filterRisk !== "all"
+              ? "Try adjusting your filters"
+              : "Get started by adding your first tenant"}
+          </p>
+          <Button onClick={() => handleOpenModal()}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Tenant
+          </Button>
         </div>
       )}
 
-      {/* Create/Edit Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-md">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>
-                  {editingTenant ? "Edit Tenant" : "Add New Tenant"}
-                </CardTitle>
-                <Button variant="ghost" size="sm" onClick={handleCloseModal}>
-                  <X className="h-4 w-4" />
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold">
+                {editingTenant ? "Edit Tenant" : "Add New Tenant"}
+              </h2>
+              <button
+                onClick={handleCloseModal}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Name *
+                </label>
+                <Input
+                  value={formData.name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email
+                </label>
+                <Input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) =>
+                    setFormData({ ...formData, email: e.target.value })
+                  }
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Phone
+                </label>
+                <Input
+                  value={formData.phone}
+                  onChange={(e) =>
+                    setFormData({ ...formData, phone: e.target.value })
+                  }
+                />
+              </div>
+
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-800 px-3 py-2 rounded text-sm">
+                  {error}
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleCloseModal}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" className="flex-1">
+                  {editingTenant ? "Update" : "Create"}
                 </Button>
               </div>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                {error && (
-                  <div className="bg-red-50 border border-red-200 text-red-800 px-3 py-2 rounded text-sm">
-                    {error}
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Full Name *
-                  </label>
-                  <Input
-                    required
-                    value={formData.name}
-                    onChange={(e) =>
-                      setFormData({ ...formData, name: e.target.value })
-                    }
-                    placeholder="e.g., John Doe"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Email
-                  </label>
-                  <Input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) =>
-                      setFormData({ ...formData, email: e.target.value })
-                    }
-                    placeholder="john@example.com"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Phone
-                  </label>
-                  <Input
-                    value={formData.phone}
-                    onChange={(e) =>
-                      setFormData({ ...formData, phone: e.target.value })
-                    }
-                    placeholder="+254 700 000000"
-                  />
-                </div>
-
-                <div className="flex gap-2 pt-4">
-                  <Button type="submit" className="flex-1">
-                    {editingTenant ? "Update Tenant" : "Create Tenant"}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleCloseModal}
-                    className="flex-1"
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
+            </form>
+          </div>
         </div>
       )}
     </div>

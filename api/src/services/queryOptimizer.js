@@ -1,5 +1,5 @@
-import { prisma } from '../db.js';
-import logger from '../utils/logger.js';
+import { prisma } from "../db.js";
+import logger from "../utils/logger.js";
 
 /**
  * Enhanced Query Optimizer Service
@@ -30,14 +30,14 @@ class QueryOptimizer {
 
     const stats = this.queryStats.get(queryName);
     stats.count++;
-    
+
     if (cached) {
       stats.cacheHits++;
     } else {
       stats.cacheMisses++;
       stats.totalDuration += duration;
       stats.avgDuration = stats.totalDuration / (stats.count - stats.cacheHits);
-      
+
       if (duration > this.slowQueryThreshold) {
         stats.slowQueries++;
         logger.warn(`Slow query detected: ${queryName}`, {
@@ -56,8 +56,14 @@ class QueryOptimizer {
     for (const [queryName, data] of this.queryStats) {
       stats[queryName] = {
         ...data,
-        cacheHitRate: data.count > 0 ? ((data.cacheHits / data.count) * 100).toFixed(2) + '%' : '0%',
-        slowQueryRate: data.count > 0 ? ((data.slowQueries / data.count) * 100).toFixed(2) + '%' : '0%',
+        cacheHitRate:
+          data.count > 0
+            ? ((data.cacheHits / data.count) * 100).toFixed(2) + "%"
+            : "0%",
+        slowQueryRate:
+          data.count > 0
+            ? ((data.slowQueries / data.count) * 100).toFixed(2) + "%"
+            : "0%",
       };
     }
     return stats;
@@ -68,15 +74,14 @@ class QueryOptimizer {
    */
   async executeQuery(queryName, queryFn, cacheKey = null, ttl = 300) {
     const startTime = Date.now();
-    
+
     try {
       // Cache disabled - execute query directly
       const result = await queryFn();
       const duration = Date.now() - startTime;
-      
+
       this.recordQuery(queryName, duration, false);
       return result;
-      
     } catch (error) {
       const duration = Date.now() - startTime;
       this.recordQuery(queryName, duration, false);
@@ -92,194 +97,225 @@ class QueryOptimizer {
    * Optimized property queries
    */
   async getProperties(agencyId, filters = {}, pagination = {}) {
-    const { page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'desc' } = pagination;
+    const {
+      page = 1,
+      limit = 10,
+      sortBy = "createdAt",
+      sortOrder = "desc",
+    } = pagination;
     const { city, type, status, minRent, maxRent, bedrooms, search } = filters;
-    
+
     // Cache disabled
     const cacheKey = null;
 
-    return this.executeQuery('getProperties', async () => {
-      const where = { agencyId };
-      
-      // Apply filters
-      if (city) where.city = { contains: city, mode: 'insensitive' };
-      if (type) where.type = type;
-      if (status) where.status = status;
-      if (bedrooms) where.bedrooms = bedrooms;
-      
-      if (minRent || maxRent) {
-        where.rentAmount = {};
-        if (minRent) where.rentAmount.gte = minRent;
-        if (maxRent) where.rentAmount.lte = maxRent;
-      }
-      
-      if (search) {
-        where.OR = [
-          { title: { contains: search, mode: 'insensitive' } },
-          { address: { contains: search, mode: 'insensitive' } },
-          { city: { contains: search, mode: 'insensitive' } },
-        ];
-      }
+    return this.executeQuery(
+      "getProperties",
+      async () => {
+        const where = { agencyId };
 
-      const [properties, total] = await Promise.all([
-        prisma.property.findMany({
-          where,
-          include: {
-            units: {
-              select: { id: true, status: true, rentAmount: true }
+        // Apply filters
+        if (city) where.city = { contains: city, mode: "insensitive" };
+        if (type) where.type = type;
+        if (status) where.status = status;
+        if (bedrooms) where.bedrooms = bedrooms;
+
+        if (minRent || maxRent) {
+          where.rentAmount = {};
+          if (minRent) where.rentAmount.gte = minRent;
+          if (maxRent) where.rentAmount.lte = maxRent;
+        }
+
+        if (search) {
+          where.OR = [
+            { title: { contains: search, mode: "insensitive" } },
+            { address: { contains: search, mode: "insensitive" } },
+            { city: { contains: search, mode: "insensitive" } },
+          ];
+        }
+
+        const [properties, total] = await Promise.all([
+          prisma.property.findMany({
+            where,
+            include: {
+              units: {
+                select: { id: true, status: true, rentAmount: true },
+              },
+              _count: {
+                select: { leases: true },
+              },
             },
-            _count: {
-              select: { leases: true }
-            }
-          },
-          orderBy: { [sortBy]: sortOrder },
-          skip: (page - 1) * limit,
-          take: limit,
-        }),
-        prisma.property.count({ where }),
-      ]);
+            orderBy: { [sortBy]: sortOrder },
+            skip: (page - 1) * limit,
+            take: limit,
+          }),
+          prisma.property.count({ where }),
+        ]);
 
-      return {
-        properties,
-        pagination: {
-          page,
-          limit,
-          total,
-          pages: Math.ceil(total / limit),
-        },
-      };
-    }, cacheKey, 300);
+        return {
+          properties,
+          pagination: {
+            page,
+            limit,
+            total,
+            pages: Math.ceil(total / limit),
+          },
+        };
+      },
+      cacheKey,
+      300
+    );
   }
 
   /**
    * Optimized tenant queries
    */
   async getTenants(agencyId, filters = {}, pagination = {}) {
-    const { page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'desc' } = pagination;
+    const {
+      page = 1,
+      limit = 10,
+      sortBy = "createdAt",
+      sortOrder = "desc",
+    } = pagination;
     const { search, isHighRisk } = filters;
-    
+
     // Cache disabled
     const cacheKey = null;
 
-    return this.executeQuery('getTenants', async () => {
-      const where = { agencyId };
-      
-      if (isHighRisk !== undefined) where.isHighRisk = isHighRisk;
-      
-      if (search) {
-        where.OR = [
-          { name: { contains: search, mode: 'insensitive' } },
-          { email: { contains: search, mode: 'insensitive' } },
-          { phone: { contains: search, mode: 'insensitive' } },
-        ];
-      }
+    return this.executeQuery(
+      "getTenants",
+      async () => {
+        const where = { agencyId };
 
-      const [tenants, total] = await Promise.all([
-        prisma.tenant.findMany({
-          where,
-          include: {
-            leases: {
-              select: {
-                id: true,
-                startDate: true,
-                endDate: true,
-                rentAmount: true,
-                property: {
-                  select: { title: true, address: true }
+        if (isHighRisk !== undefined) where.isHighRisk = isHighRisk;
+
+        if (search) {
+          where.OR = [
+            { name: { contains: search, mode: "insensitive" } },
+            { email: { contains: search, mode: "insensitive" } },
+            { phone: { contains: search, mode: "insensitive" } },
+          ];
+        }
+
+        const [tenants, total] = await Promise.all([
+          prisma.tenant.findMany({
+            where,
+            include: {
+              leases: {
+                select: {
+                  id: true,
+                  startDate: true,
+                  endDate: true,
+                  rentAmount: true,
+                  property: {
+                    select: { title: true, address: true },
+                  },
+                  unit: {
+                    select: { unitNumber: true },
+                  },
                 },
-                unit: {
-                  select: { unitNumber: true }
-                }
+                orderBy: { startDate: "desc" },
+                take: 1,
               },
-              orderBy: { startDate: 'desc' },
-              take: 1,
+              _count: {
+                select: { leases: true, vacateNotices: true },
+              },
             },
-            _count: {
-              select: { leases: true, vacateNotices: true }
-            }
-          },
-          orderBy: { [sortBy]: sortOrder },
-          skip: (page - 1) * limit,
-          take: limit,
-        }),
-        prisma.tenant.count({ where }),
-      ]);
+            orderBy: { [sortBy]: sortOrder },
+            skip: (page - 1) * limit,
+            take: limit,
+          }),
+          prisma.tenant.count({ where }),
+        ]);
 
-      return {
-        tenants,
-        pagination: {
-          page,
-          limit,
-          total,
-          pages: Math.ceil(total / limit),
-        },
-      };
-    }, cacheKey, 300);
+        return {
+          tenants,
+          pagination: {
+            page,
+            limit,
+            total,
+            pages: Math.ceil(total / limit),
+          },
+        };
+      },
+      cacheKey,
+      300
+    );
   }
 
   /**
    * Optimized payment queries with analytics
    */
   async getPayments(agencyId, filters = {}, pagination = {}) {
-    const { page = 1, limit = 10, sortBy = 'paidAt', sortOrder = 'desc' } = pagination;
-    const { leaseId, method, startDate, endDate, minAmount, maxAmount } = filters;
-    
+    const {
+      page = 1,
+      limit = 10,
+      sortBy = "paidAt",
+      sortOrder = "desc",
+    } = pagination;
+    const { leaseId, method, startDate, endDate, minAmount, maxAmount } =
+      filters;
+
     // Cache disabled
     const cacheKey = null;
 
-    return this.executeQuery('getPayments', async () => {
-      const where = { agencyId };
-      
-      if (leaseId) where.leaseId = leaseId;
-      if (method) where.method = method;
-      
-      if (startDate || endDate) {
-        where.paidAt = {};
-        if (startDate) where.paidAt.gte = new Date(startDate);
-        if (endDate) where.paidAt.lte = new Date(endDate);
-      }
-      
-      if (minAmount || maxAmount) {
-        where.amount = {};
-        if (minAmount) where.amount.gte = minAmount;
-        if (maxAmount) where.amount.lte = maxAmount;
-      }
+    return this.executeQuery(
+      "getPayments",
+      async () => {
+        const where = { agencyId };
 
-      const [payments, total, analytics] = await Promise.all([
-        prisma.payment.findMany({
-          where,
-          include: {
-            lease: {
-              select: {
-                id: true,
-                tenant: { select: { name: true, phone: true } },
-                property: { select: { title: true } },
-                unit: { select: { unitNumber: true } }
-              }
+        if (leaseId) where.leaseId = leaseId;
+        if (method) where.method = method;
+
+        if (startDate || endDate) {
+          where.paidAt = {};
+          if (startDate) where.paidAt.gte = new Date(startDate);
+          if (endDate) where.paidAt.lte = new Date(endDate);
+        }
+
+        if (minAmount || maxAmount) {
+          where.amount = {};
+          if (minAmount) where.amount.gte = minAmount;
+          if (maxAmount) where.amount.lte = maxAmount;
+        }
+
+        const [payments, total, analytics] = await Promise.all([
+          prisma.payment.findMany({
+            where,
+            include: {
+              lease: {
+                select: {
+                  id: true,
+                  tenant: { select: { name: true, phone: true } },
+                  property: { select: { title: true } },
+                  unit: { select: { unitNumber: true } },
+                },
+              },
+              invoice: {
+                select: { id: true, amount: true, status: true },
+              },
             },
-            invoice: {
-              select: { id: true, amount: true, status: true }
-            }
-          },
-          orderBy: { [sortBy]: sortOrder },
-          skip: (page - 1) * limit,
-          take: limit,
-        }),
-        prisma.payment.count({ where }),
-        this.getPaymentAnalytics(agencyId, filters),
-      ]);
+            orderBy: { [sortBy]: sortOrder },
+            skip: (page - 1) * limit,
+            take: limit,
+          }),
+          prisma.payment.count({ where }),
+          this.getPaymentAnalytics(agencyId, filters),
+        ]);
 
-      return {
-        payments,
-        analytics,
-        pagination: {
-          page,
-          limit,
-          total,
-          pages: Math.ceil(total / limit),
-        },
-      };
-    }, cacheKey, 180);
+        return {
+          payments,
+          analytics,
+          pagination: {
+            page,
+            limit,
+            total,
+            pages: Math.ceil(total / limit),
+          },
+        };
+      },
+      cacheKey,
+      180
+    );
   }
 
   /**
@@ -288,13 +324,13 @@ class QueryOptimizer {
   async getPaymentAnalytics(agencyId, filters = {}) {
     const where = { agencyId };
     const { startDate, endDate, minAmount, maxAmount } = filters;
-    
+
     if (startDate || endDate) {
       where.paidAt = {};
       if (startDate) where.paidAt.gte = new Date(startDate);
       if (endDate) where.paidAt.lte = new Date(endDate);
     }
-    
+
     if (minAmount || maxAmount) {
       where.amount = {};
       if (minAmount) where.amount.gte = minAmount;
@@ -309,7 +345,7 @@ class QueryOptimizer {
         _avg: { amount: true },
       }),
       prisma.payment.groupBy({
-        by: ['method'],
+        by: ["method"],
         where,
         _sum: { amount: true },
         _count: true,
@@ -325,18 +361,24 @@ class QueryOptimizer {
         amount: true,
       },
       orderBy: {
-        paidAt: 'desc',
+        paidAt: "desc",
       },
     });
 
     // Group by month manually
     const monthlyTrendsMap = new Map();
-    payments.forEach(payment => {
+    payments.forEach((payment) => {
       if (payment.paidAt) {
-        const monthKey = `${payment.paidAt.getFullYear()}-${String(payment.paidAt.getMonth() + 1).padStart(2, '0')}`;
+        const monthKey = `${payment.paidAt.getFullYear()}-${String(
+          payment.paidAt.getMonth() + 1
+        ).padStart(2, "0")}`;
         if (!monthlyTrendsMap.has(monthKey)) {
           monthlyTrendsMap.set(monthKey, {
-            month: new Date(payment.paidAt.getFullYear(), payment.paidAt.getMonth(), 1),
+            month: new Date(
+              payment.paidAt.getFullYear(),
+              payment.paidAt.getMonth(),
+              1
+            ),
             total_amount: 0,
             payment_count: 0,
           });
@@ -367,35 +409,40 @@ class QueryOptimizer {
     // Cache disabled
     const cacheKey = null;
 
-    return this.executeQuery('getDashboardStats', async () => {
-      const [
-        propertyStats,
-        tenantStats,
-        paymentStats,
-        recentPayments,
-        upcomingRent,
-      ] = await Promise.all([
-        this.getPropertyStats(agencyId),
-        this.getTenantStats(agencyId),
-        this.getPaymentStatsForDashboard(agencyId),
-        this.getRecentPayments(agencyId, 5),
-        this.getUpcomingRentPayments(agencyId, 10),
-      ]);
+    return this.executeQuery(
+      "getDashboardStats",
+      async () => {
+        const [
+          propertyStats,
+          tenantStats,
+          paymentStats,
+          recentPayments,
+          upcomingRent,
+        ] = await Promise.all([
+          this.getPropertyStats(agencyId),
+          this.getTenantStats(agencyId),
+          this.getPaymentStatsForDashboard(agencyId),
+          this.getRecentPayments(agencyId, 5),
+          this.getUpcomingRentPayments(agencyId, 10),
+        ]);
 
-      return {
-        properties: propertyStats,
-        tenants: tenantStats,
-        payments: paymentStats,
-        recentPayments,
-        upcomingRent,
-        lastUpdated: new Date().toISOString(),
-      };
-    }, cacheKey, 300);
+        return {
+          properties: propertyStats,
+          tenants: tenantStats,
+          payments: paymentStats,
+          recentPayments,
+          upcomingRent,
+          lastUpdated: new Date().toISOString(),
+        };
+      },
+      cacheKey,
+      300
+    );
   }
 
   async getPropertyStats(agencyId) {
     return prisma.property.groupBy({
-      by: ['status'],
+      by: ["status"],
       where: { agencyId },
       _count: true,
     });
@@ -408,11 +455,8 @@ class QueryOptimizer {
       prisma.lease.count({
         where: {
           agencyId,
-          OR: [
-            { endDate: null },
-            { endDate: { gt: new Date() } }
-          ]
-        }
+          OR: [{ endDate: null }, { endDate: { gt: new Date() } }],
+        },
       }),
     ]);
 
@@ -428,7 +472,7 @@ class QueryOptimizer {
       prisma.payment.aggregate({
         where: {
           agencyId,
-          paidAt: { gte: currentMonth }
+          paidAt: { gte: currentMonth },
         },
         _sum: { amount: true },
         _count: true,
@@ -437,9 +481,13 @@ class QueryOptimizer {
         where: {
           agencyId,
           paidAt: {
-            gte: new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1),
+            gte: new Date(
+              currentMonth.getFullYear(),
+              currentMonth.getMonth() - 1,
+              1
+            ),
             lt: currentMonth,
-          }
+          },
         },
         _sum: { amount: true },
         _count: true,
@@ -466,26 +514,27 @@ class QueryOptimizer {
           select: {
             tenant: { select: { name: true } },
             property: { select: { title: true } },
-            unit: { select: { unitNumber: true } }
-          }
-        }
+            unit: { select: { unitNumber: true } },
+          },
+        },
       },
-      orderBy: { paidAt: 'desc' },
+      orderBy: { paidAt: "desc" },
       take: limit,
     });
   }
 
   async getUpcomingRentPayments(agencyId, limit = 10) {
     const today = new Date();
-    const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, today.getDate());
+    const nextMonth = new Date(
+      today.getFullYear(),
+      today.getMonth() + 1,
+      today.getDate()
+    );
 
     return prisma.lease.findMany({
       where: {
         agencyId,
-        OR: [
-          { endDate: null },
-          { endDate: { gt: today } }
-        ]
+        OR: [{ endDate: null }, { endDate: { gt: today } }],
       },
       include: {
         tenant: { select: { name: true, phone: true } },
@@ -496,12 +545,12 @@ class QueryOptimizer {
             paidAt: {
               gte: new Date(today.getFullYear(), today.getMonth(), 1),
               lt: nextMonth,
-            }
+            },
           },
-          select: { amount: true, paidAt: true }
-        }
+          select: { amount: true, paidAt: true },
+        },
       },
-      orderBy: { paymentDayOfMonth: 'asc' },
+      orderBy: { paymentDayOfMonth: "asc" },
       take: limit,
     });
   }
@@ -511,7 +560,7 @@ class QueryOptimizer {
    */
   clearStats() {
     this.queryStats.clear();
-    logger.info('Query optimizer statistics cleared');
+    logger.info("Query optimizer statistics cleared");
   }
 
   /**
@@ -519,7 +568,7 @@ class QueryOptimizer {
    */
   setCacheEnabled(enabled) {
     this.cacheEnabled = enabled;
-    logger.info(`Query optimizer caching ${enabled ? 'enabled' : 'disabled'}`);
+    logger.info(`Query optimizer caching ${enabled ? "enabled" : "disabled"}`);
   }
 }
 
@@ -528,30 +577,37 @@ const queryOptimizer = new QueryOptimizer();
 
 // Stub functions for missing exports
 export const getPropertiesOptimized = async (options = {}) => {
-  logger.warn('getPropertiesOptimized called - using basic implementation');
-  
-  const { agencyId, page = 1, limit = 50, status, includeUnits, includeLeases } = options;
-  
+  logger.warn("getPropertiesOptimized called - using basic implementation");
+
+  const {
+    agencyId,
+    page = 1,
+    limit = 50,
+    status,
+    includeUnits,
+    includeLeases,
+  } = options;
+
   const where = { agencyId };
   if (status) where.status = status;
-  
+
   const include = {};
   if (includeUnits) include.units = true;
   if (includeLeases) include.leases = true;
-  
+
   const skip = (page - 1) * limit;
-  
+
   const [properties, total] = await Promise.all([
     prisma.property.findMany({
       where,
       include,
       skip,
       take: limit,
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     }),
     prisma.property.count({ where }),
   ]);
-  
+
   return {
     properties,
     total,
@@ -562,16 +618,16 @@ export const getPropertiesOptimized = async (options = {}) => {
 };
 
 export const getPaymentsOptimized = async (options = {}) => {
-  logger.warn('getPaymentsOptimized called - using basic implementation');
-  
+  logger.warn("getPaymentsOptimized called - using basic implementation");
+
   const { agencyId, page = 1, limit = 50, leaseId, method } = options;
-  
+
   const where = { agencyId };
   if (leaseId) where.leaseId = leaseId;
   if (method) where.method = method;
-  
+
   const skip = (page - 1) * limit;
-  
+
   const [payments, total] = await Promise.all([
     prisma.payment.findMany({
       where,
@@ -587,11 +643,11 @@ export const getPaymentsOptimized = async (options = {}) => {
       },
       skip,
       take: limit,
-      orderBy: { paidAt: 'desc' },
+      orderBy: { paidAt: "desc" },
     }),
     prisma.payment.count({ where }),
   ]);
-  
+
   return {
     payments,
     total,
@@ -601,19 +657,65 @@ export const getPaymentsOptimized = async (options = {}) => {
   };
 };
 
+export const getTenantsOptimized = async (agencyId, options = {}) => {
+  logger.warn("getTenantsOptimized called - using basic implementation");
+
+  const { page = 1, limit = 50, search, status } = options;
+
+  const where = { agencyId };
+  if (search) {
+    where.OR = [
+      { firstName: { contains: search, mode: "insensitive" } },
+      { lastName: { contains: search, mode: "insensitive" } },
+      { email: { contains: search, mode: "insensitive" } },
+      { phone: { contains: search, mode: "insensitive" } },
+    ];
+  }
+  if (status) where.status = status;
+
+  const [tenants, total] = await Promise.all([
+    prisma.tenant.findMany({
+      where,
+      skip: (page - 1) * limit,
+      take: limit,
+      include: {
+        leases: {
+          include: {
+            unit: {
+              include: {
+                property: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.tenant.count({ where }),
+  ]);
+
+  return {
+    tenants,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
+  };
+};
+
 export const getInvoicesOptimized = async (options = {}) => {
-  logger.warn('getInvoicesOptimized called - using basic implementation');
-  
+  logger.warn("getInvoicesOptimized called - using basic implementation");
+
   const { agencyId, page = 1, limit = 50, status, leaseId, overdue } = options;
-  
+
   const where = { agencyId };
   if (status) where.status = status;
   if (leaseId) where.leaseId = leaseId;
-  if (overdue === 'true') {
+  if (overdue === "true") {
     where.dueAt = { lt: new Date() };
-    where.status = { not: 'PAID' };
+    where.status = { not: "PAID" };
   }
-  
+
   const [invoices, total] = await Promise.all([
     prisma.invoice.findMany({
       where,
@@ -628,11 +730,11 @@ export const getInvoicesOptimized = async (options = {}) => {
         },
         payments: true,
       },
-      orderBy: { dueAt: 'desc' },
+      orderBy: { dueAt: "desc" },
     }),
     prisma.invoice.count({ where }),
   ]);
-  
+
   return {
     invoices,
     total,
@@ -643,32 +745,29 @@ export const getInvoicesOptimized = async (options = {}) => {
 };
 
 export const getDashboardDataOptimized = async (agencyId) => {
-  logger.warn('getDashboardDataOptimized called - using basic implementation');
-  
+  logger.warn("getDashboardDataOptimized called - using basic implementation");
+
   const [properties, tenants, leases, payments] = await Promise.all([
     prisma.property.count({ where: { agencyId } }),
     prisma.tenant.count({ where: { agencyId } }),
-    prisma.lease.count({ 
-      where: { 
+    prisma.lease.count({
+      where: {
         agencyId,
-        OR: [
-          { endDate: null },
-          { endDate: { gt: new Date() } }
-        ]
-      }
+        OR: [{ endDate: null }, { endDate: { gt: new Date() } }],
+      },
     }),
     prisma.payment.aggregate({
-      where: { 
+      where: {
         agencyId,
         paidAt: {
-          gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-        }
+          gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+        },
       },
       _sum: { amount: true },
       _count: true,
     }),
   ]);
-  
+
   return {
     properties: { total: properties },
     tenants: { total: tenants },
@@ -677,15 +776,15 @@ export const getDashboardDataOptimized = async (agencyId) => {
       thisMonth: {
         amount: payments._sum.amount || 0,
         count: payments._count || 0,
-      }
+      },
     },
   };
 };
 
 export const queryTimeMiddleware = (req, res, next) => {
   const startTime = Date.now();
-  
-  res.on('finish', () => {
+
+  res.on("finish", () => {
     const duration = Date.now() - startTime;
     if (duration > 1000) {
       logger.warn(`Slow request: ${req.method} ${req.path}`, {
@@ -694,7 +793,7 @@ export const queryTimeMiddleware = (req, res, next) => {
       });
     }
   });
-  
+
   next();
 };
 

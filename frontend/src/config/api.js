@@ -11,6 +11,44 @@ function generateCorrelationId() {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
+/**
+ * Extract data from nested API response
+ * Handles various response formats:
+ * - response.data.data.properties (nested with key)
+ * - response.data.properties (direct with key)
+ * - response.data.data (nested array)
+ * - response.data (direct array)
+ */
+export function extractResponseData(response, dataKey = null) {
+  if (!response || !response.data) {
+    return [];
+  }
+
+  const data = response.data;
+
+  // Check nested structure with specific key (e.g., response.data.data.properties)
+  if (dataKey && data.data && data.data[dataKey]) {
+    return Array.isArray(data.data[dataKey]) ? data.data[dataKey] : [];
+  }
+
+  // Check top-level with specific key (e.g., response.data.properties)
+  if (dataKey && data[dataKey]) {
+    return Array.isArray(data[dataKey]) ? data[dataKey] : [];
+  }
+
+  // Check nested data (e.g., response.data.data)
+  if (data.data) {
+    return Array.isArray(data.data) ? data.data : [];
+  }
+
+  // Check direct data (e.g., response.data)
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  return [];
+}
+
 // Create axios instance
 const apiClient = axios.create({
   baseURL: API_BASE_URL,

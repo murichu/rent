@@ -1,6 +1,6 @@
-import winston from 'winston';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import winston from "winston";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -15,18 +15,18 @@ const levels = {
 
 // Define colors for each level
 const colors = {
-  error: 'red',
-  warn: 'yellow',
-  info: 'green',
-  http: 'magenta',
-  debug: 'blue',
+  error: "red",
+  warn: "yellow",
+  info: "green",
+  http: "magenta",
+  debug: "blue",
 };
 
 winston.addColors(colors);
 
 // Define log format
 const format = winston.format.combine(
-  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+  winston.format.timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
   winston.format.errors({ stack: true }),
   winston.format.splat(),
   winston.format.json()
@@ -35,7 +35,7 @@ const format = winston.format.combine(
 // Define console format for development
 const consoleFormat = winston.format.combine(
   winston.format.colorize({ all: true }),
-  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+  winston.format.timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
   winston.format.printf(
     (info) => `${info.timestamp} ${info.level}: ${info.message}`
   )
@@ -49,31 +49,31 @@ const transports = [
   }),
   // Write all logs to combined.log
   new winston.transports.File({
-    filename: path.join(__dirname, '../../logs/combined.log'),
+    filename: path.join(__dirname, "../../logs/combined.log"),
     format,
   }),
   // Write error logs to error.log
   new winston.transports.File({
-    filename: path.join(__dirname, '../../logs/error.log'),
-    level: 'error',
+    filename: path.join(__dirname, "../../logs/error.log"),
+    level: "error",
     format,
   }),
 ];
 
 // Create the logger
 const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || 'info',
+  level: process.env.LOG_LEVEL || "info",
   levels,
   format,
   transports,
   exceptionHandlers: [
     new winston.transports.File({
-      filename: path.join(__dirname, '../../logs/exceptions.log'),
+      filename: path.join(__dirname, "../../logs/exceptions.log"),
     }),
   ],
   rejectionHandlers: [
     new winston.transports.File({
-      filename: path.join(__dirname, '../../logs/rejections.log'),
+      filename: path.join(__dirname, "../../logs/rejections.log"),
     }),
   ],
 });
@@ -91,49 +91,69 @@ function generateCorrelationId() {
  * PII Sanitization - Remove sensitive information from logs
  */
 function sanitizePII(data) {
-  if (typeof data !== 'object' || data === null) {
+  if (typeof data !== "object" || data === null) {
     return data;
   }
 
   const sensitiveFields = [
-    'password', 'token', 'secret', 'key', 'authorization',
-    'ssn', 'social', 'credit_card', 'creditCard', 'cvv',
-    'email', 'phone', 'phoneNumber', 'address', 'ip',
-    'firstName', 'lastName', 'fullName', 'name'
+    "password",
+    "token",
+    "secret",
+    "key",
+    "authorization",
+    "ssn",
+    "social",
+    "credit_card",
+    "creditCard",
+    "cvv",
+    "email",
+    "phone",
+    "phoneNumber",
+    "address",
+    "ip",
+    "firstName",
+    "lastName",
+    "fullName",
+    "name",
   ];
 
   const sanitized = Array.isArray(data) ? [...data] : { ...data };
 
-  const sanitizeValue = (obj, path = '') => {
+  const sanitizeValue = (obj, path = "") => {
     for (const [key, value] of Object.entries(obj)) {
       const fullPath = path ? `${path}.${key}` : key;
-      
+
       // Check if field name contains sensitive keywords
-      const isSensitive = sensitiveFields.some(field => 
+      const isSensitive = sensitiveFields.some((field) =>
         key.toLowerCase().includes(field.toLowerCase())
       );
 
       if (isSensitive) {
-        if (typeof value === 'string') {
+        if (typeof value === "string") {
           // Mask email addresses
-          if (value.includes('@')) {
-            const [username, domain] = value.split('@');
+          if (value.includes("@")) {
+            const [username, domain] = value.split("@");
             obj[key] = `${username.substring(0, 2)}***@${domain}`;
           }
           // Mask phone numbers
-          else if (/^\+?[\d\s\-\(\)]+$/.test(value) && value.replace(/\D/g, '').length >= 10) {
+          else if (
+            /^\+?[\d\s\-\(\)]+$/.test(value) &&
+            value.replace(/\D/g, "").length >= 10
+          ) {
             obj[key] = `***-***-${value.slice(-4)}`;
           }
           // Mask other sensitive strings
           else if (value.length > 4) {
-            obj[key] = `${value.substring(0, 2)}${'*'.repeat(value.length - 4)}${value.slice(-2)}`;
+            obj[key] = `${value.substring(0, 2)}${"*".repeat(
+              value.length - 4
+            )}${value.slice(-2)}`;
           } else {
-            obj[key] = '***';
+            obj[key] = "***";
           }
         } else {
-          obj[key] = '[REDACTED]';
+          obj[key] = "[REDACTED]";
         }
-      } else if (typeof value === 'object' && value !== null) {
+      } else if (typeof value === "object" && value !== null) {
         sanitizeValue(value, fullPath);
       }
     }
@@ -147,20 +167,20 @@ function sanitizePII(data) {
  * Log rotation configuration
  */
 const logRotationConfig = {
-  maxSize: '20m',
-  maxFiles: '14d',
-  datePattern: 'YYYY-MM-DD',
-  zippedArchive: true
+  maxSize: "20m",
+  maxFiles: "14d",
+  datePattern: "YYYY-MM-DD",
+  zippedArchive: true,
 };
 
 /**
  * Security event severity levels
  */
 const SecuritySeverity = {
-  LOW: 'low',
-  MEDIUM: 'medium',
-  HIGH: 'high',
-  CRITICAL: 'critical'
+  LOW: "low",
+  MEDIUM: "medium",
+  HIGH: "high",
+  CRITICAL: "critical",
 };
 
 /**
@@ -168,14 +188,14 @@ const SecuritySeverity = {
  */
 export function auditLog(action, userId, details = {}, correlationId = null) {
   const sanitizedDetails = sanitizePII(details);
-  
-  logger.warn('AUDIT', {
+
+  logger.warn("AUDIT", {
     action,
     userId,
     timestamp: new Date().toISOString(),
     correlationId,
-    type: 'audit',
-    category: 'security',
+    type: "audit",
+    category: "security",
     ...sanitizedDetails,
   });
 }
@@ -183,31 +203,38 @@ export function auditLog(action, userId, details = {}, correlationId = null) {
 /**
  * Enhanced security event logger with severity levels
  */
-export function securityLog(event, details = {}, severity = SecuritySeverity.HIGH, correlationId = null) {
+export function securityLog(
+  event,
+  details = {},
+  severity = SecuritySeverity.HIGH,
+  correlationId = null
+) {
   const sanitizedDetails = sanitizePII(details);
-  
-  const logLevel = severity === SecuritySeverity.CRITICAL ? 'error' : 'warn';
-  
-  logger[logLevel]('SECURITY_EVENT', {
+
+  const logLevel = severity === SecuritySeverity.CRITICAL ? "error" : "warn";
+
+  logger[logLevel]("SECURITY_EVENT", {
     event,
     details: sanitizedDetails,
     timestamp: new Date().toISOString(),
     correlationId,
-    type: 'security',
+    type: "security",
     severity,
-    category: 'security_incident',
-    requiresAttention: severity === SecuritySeverity.CRITICAL || severity === SecuritySeverity.HIGH
+    category: "security_incident",
+    requiresAttention:
+      severity === SecuritySeverity.CRITICAL ||
+      severity === SecuritySeverity.HIGH,
   });
 
   // For critical security events, also log to separate security log
   if (severity === SecuritySeverity.CRITICAL) {
-    logger.error('CRITICAL_SECURITY_ALERT', {
+    logger.error("CRITICAL_SECURITY_ALERT", {
       event,
       details: sanitizedDetails,
       timestamp: new Date().toISOString(),
       correlationId,
       alert: true,
-      escalate: true
+      escalate: true,
     });
   }
 }
@@ -217,23 +244,30 @@ export function securityLog(event, details = {}, severity = SecuritySeverity.HIG
  */
 export function authLog(event, userId, details = {}, correlationId = null) {
   const sanitizedDetails = sanitizePII(details);
-  
-  logger.info('AUTH_EVENT', {
+
+  logger.info("AUTH_EVENT", {
     event,
     userId,
     details: sanitizedDetails,
     timestamp: new Date().toISOString(),
     correlationId,
-    type: 'authentication',
-    category: 'auth'
+    type: "authentication",
+    category: "auth",
   });
 }
 
 /**
  * Authorization event logger
  */
-export function authzLog(event, userId, resource, action, result, correlationId = null) {
-  logger.info('AUTHZ_EVENT', {
+export function authzLog(
+  event,
+  userId,
+  resource,
+  action,
+  result,
+  correlationId = null
+) {
+  logger.info("AUTHZ_EVENT", {
     event,
     userId,
     resource,
@@ -241,42 +275,54 @@ export function authzLog(event, userId, resource, action, result, correlationId 
     result,
     timestamp: new Date().toISOString(),
     correlationId,
-    type: 'authorization',
-    category: 'access_control'
+    type: "authorization",
+    category: "access_control",
   });
 }
 
 /**
  * Data access logger for sensitive operations
  */
-export function dataAccessLog(operation, userId, resource, details = {}, correlationId = null) {
+export function dataAccessLog(
+  operation,
+  userId,
+  resource,
+  details = {},
+  correlationId = null
+) {
   const sanitizedDetails = sanitizePII(details);
-  
-  logger.info('DATA_ACCESS', {
+
+  logger.info("DATA_ACCESS", {
     operation,
     userId,
     resource,
     details: sanitizedDetails,
     timestamp: new Date().toISOString(),
     correlationId,
-    type: 'data_access',
-    category: 'data_governance'
+    type: "data_access",
+    category: "data_governance",
   });
 }
 
 /**
  * Rate limiting event logger
  */
-export function rateLimitLog(event, clientId, endpoint, details = {}, correlationId = null) {
-  logger.warn('RATE_LIMIT', {
+export function rateLimitLog(
+  event,
+  clientId,
+  endpoint,
+  details = {},
+  correlationId = null
+) {
+  logger.warn("RATE_LIMIT", {
     event,
     clientId,
     endpoint,
     details,
     timestamp: new Date().toISOString(),
     correlationId,
-    type: 'rate_limit',
-    category: 'security'
+    type: "rate_limit",
+    category: "security",
   });
 }
 
@@ -284,12 +330,12 @@ export function rateLimitLog(event, clientId, endpoint, details = {}, correlatio
  * Performance logger
  */
 export function performanceLog(operation, duration, details = {}) {
-  logger.info('PERFORMANCE', {
+  logger.info("PERFORMANCE", {
     operation,
     duration: `${duration}ms`,
     details,
     timestamp: new Date().toISOString(),
-    type: 'performance'
+    type: "performance",
   });
 }
 
@@ -297,11 +343,11 @@ export function performanceLog(operation, duration, details = {}) {
  * Business event logger
  */
 export function businessLog(event, data = {}) {
-  logger.info('BUSINESS_EVENT', {
+  logger.info("BUSINESS_EVENT", {
     event,
     data,
     timestamp: new Date().toISOString(),
-    type: 'business'
+    type: "business",
   });
 }
 
@@ -309,90 +355,111 @@ export function businessLog(event, data = {}) {
  * Enhanced request logging middleware with security context
  */
 export const requestLogger = (req, res, next) => {
-  const correlationId = req.headers['x-correlation-id'] || generateCorrelationId();
+  const correlationId =
+    req.headers["x-correlation-id"] || generateCorrelationId();
   req.correlationId = correlationId;
-  
+
   // Add correlation ID to response headers
-  res.setHeader('X-Correlation-ID', correlationId);
-  
+  res.setHeader("X-Correlation-ID", correlationId);
+
   // Extract user context for logging
-  const userId = req.user?.id || req.user?.userId || 'anonymous';
-  const userRole = req.user?.role || 'unknown';
-  
+  const userId = req.user?.id || req.user?.userId || "anonymous";
+  const userRole = req.user?.role || "unknown";
+
   // Sanitize request data for logging
   const sanitizedHeaders = sanitizePII(req.headers);
   const sanitizedQuery = sanitizePII(req.query);
-  
-  // Log request start with security context
-  logger.info('Request started', {
-    method: req.method,
-    url: req.url,
-    userAgent: req.get('User-Agent'),
-    ip: req.ip,
-    userId,
-    userRole,
-    headers: sanitizedHeaders,
-    query: sanitizedQuery,
-    correlationId,
-    type: 'request_start',
-    category: 'http_request'
-  });
-  
-  // Capture response time
-  const startTime = Date.now();
-  
-  // Log response end
-  const originalSend = res.send;
-  res.send = function(data) {
-    const duration = Date.now() - startTime;
-    
-    logger.info('Request completed', {
+
+  // Log request start with security context (skip health checks in dev)
+  const shouldLog =
+    process.env.NODE_ENV === "production" ||
+    (!req.url.includes("/health") &&
+      !req.url.includes("/alive") &&
+      !req.url.includes("/ready"));
+
+  if (shouldLog) {
+    logger.info("Request started", {
       method: req.method,
       url: req.url,
-      statusCode: res.statusCode,
-      duration: `${duration}ms`,
+      userAgent: req.get("User-Agent"),
+      ip: req.ip,
       userId,
       userRole,
+      headers: sanitizedHeaders,
+      query: sanitizedQuery,
       correlationId,
-      type: 'request_end',
-      category: 'http_request'
+      type: "request_start",
+      category: "http_request",
     });
-    
+  }
+
+  // Capture response time
+  const startTime = Date.now();
+
+  // Log response end
+  const originalSend = res.send;
+  res.send = function (data) {
+    const duration = Date.now() - startTime;
+
+    if (shouldLog) {
+      logger.info("Request completed", {
+        method: req.method,
+        url: req.url,
+        statusCode: res.statusCode,
+        duration: `${duration}ms`,
+        userId,
+        userRole,
+        correlationId,
+        type: "request_end",
+        category: "http_request",
+      });
+    }
+
     // Log slow requests with performance category
     if (duration > 1000) {
-      performanceLog('slow_request', duration, {
+      performanceLog("slow_request", duration, {
         method: req.method,
         url: req.url,
         userId,
-        correlationId
+        correlationId,
       });
     }
 
     // Log suspicious activity
     if (res.statusCode === 401 || res.statusCode === 403) {
-      securityLog('access_denied', {
-        method: req.method,
-        url: req.url,
-        statusCode: res.statusCode,
-        userId,
-        ip: req.ip,
-        userAgent: req.get('User-Agent')
-      }, SecuritySeverity.MEDIUM, correlationId);
+      securityLog(
+        "access_denied",
+        {
+          method: req.method,
+          url: req.url,
+          statusCode: res.statusCode,
+          userId,
+          ip: req.ip,
+          userAgent: req.get("User-Agent"),
+        },
+        SecuritySeverity.MEDIUM,
+        correlationId
+      );
     }
 
     // Log potential attacks
     if (res.statusCode === 429) {
-      securityLog('rate_limit_exceeded', {
-        method: req.method,
-        url: req.url,
-        userId,
-        ip: req.ip
-      }, SecuritySeverity.HIGH, correlationId);
+      securityLog(
+        "rate_limit_exceeded",
+        {
+          method: req.method,
+          url: req.url,
+          userId,
+          ip: req.ip,
+        },
+        SecuritySeverity.HIGH,
+        correlationId
+      );
     }
-    
+
     return originalSend.call(this, data);
   };
-  
+
   next();
 };
 
@@ -400,53 +467,63 @@ export const requestLogger = (req, res, next) => {
  * Enhanced error logging middleware with security context
  */
 export const errorLogger = (error, req, res, next) => {
-  const userId = req.user?.id || req.user?.userId || 'anonymous';
-  const userRole = req.user?.role || 'unknown';
-  
+  const userId = req.user?.id || req.user?.userId || "anonymous";
+  const userRole = req.user?.role || "unknown";
+
   // Sanitize error details
   const sanitizedError = {
     message: error.message,
     name: error.name,
     statusCode: error.statusCode || error.status,
     // Only include stack trace in development
-    ...(process.env.NODE_ENV !== 'production' && { stack: error.stack })
+    ...(process.env.NODE_ENV !== "production" && { stack: error.stack }),
   };
 
-  logger.error('Request error', {
+  logger.error("Request error", {
     error: sanitizedError,
     method: req.method,
     url: req.url,
     userId,
     userRole,
     ip: req.ip,
-    userAgent: req.get('User-Agent'),
+    userAgent: req.get("User-Agent"),
     correlationId: req.correlationId,
-    type: 'request_error',
-    category: 'application_error'
+    type: "request_error",
+    category: "application_error",
   });
 
   // Log security-related errors with higher severity
   if (error.statusCode === 401 || error.statusCode === 403) {
-    securityLog('authentication_error', {
-      error: error.message,
-      method: req.method,
-      url: req.url,
-      userId,
-      ip: req.ip
-    }, SecuritySeverity.MEDIUM, req.correlationId);
+    securityLog(
+      "authentication_error",
+      {
+        error: error.message,
+        method: req.method,
+        url: req.url,
+        userId,
+        ip: req.ip,
+      },
+      SecuritySeverity.MEDIUM,
+      req.correlationId
+    );
   }
 
   // Log validation errors that might indicate attacks
-  if (error.statusCode === 400 && error.name === 'ValidationError') {
-    securityLog('validation_error', {
-      error: error.message,
-      method: req.method,
-      url: req.url,
-      userId,
-      ip: req.ip
-    }, SecuritySeverity.LOW, req.correlationId);
+  if (error.statusCode === 400 && error.name === "ValidationError") {
+    securityLog(
+      "validation_error",
+      {
+        error: error.message,
+        method: req.method,
+        url: req.url,
+        userId,
+        ip: req.ip,
+      },
+      SecuritySeverity.LOW,
+      req.correlationId
+    );
   }
-  
+
   next(error);
 };
 
@@ -461,8 +538,6 @@ export const morganStream = {
 export { SecuritySeverity };
 
 // Export enhanced logging functions
-export {
-  sanitizePII
-};
+export { sanitizePII };
 
 export default logger;

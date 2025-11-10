@@ -1,216 +1,197 @@
-import { useEffect, useState } from 'react'
-import { Plus, Search, Calendar, Edit, Trash2, X, AlertCircle } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
-import axios from 'axios'
+import { useEffect, useState } from "react";
+import {
+  FileText,
+  Search,
+  Plus,
+  Calendar,
+  DollarSign,
+  User,
+  Filter,
+  X,
+  AlertCircle,
+} from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { apiClient } from "../config/api";
 
 const Leases = () => {
-  const [leases, setLeases] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState('')
-  const [showModal, setShowModal] = useState(false)
-  const [editingLease, setEditingLease] = useState(null)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
-  const [properties, setProperties] = useState([])
-  const [tenants, setTenants] = useState([])
+  const [leases, setLeases] = useState([]);
+  const [properties, setProperties] = useState([]);
+  const [tenants, setTenants] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showModal, setShowModal] = useState(false);
+  const [editingLease, setEditingLease] = useState(null);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterStatus, setFilterStatus] = useState("all");
+
   const [formData, setFormData] = useState({
-    propertyId: '',
-    tenantId: '',
-    startDate: '',
-    endDate: '',
-    rentAmount: '',
-    paymentDayOfMonth: '1'
-  })
+    propertyId: "",
+    tenantId: "",
+    startDate: "",
+    endDate: "",
+    rentAmount: "",
+    paymentDayOfMonth: "1",
+  });
 
   useEffect(() => {
-    fetchLeases()
-    fetchProperties()
-    fetchTenants()
-  }, [])
+    fetchData();
+  }, []);
 
-  const fetchLeases = async () => {
+  const fetchData = async () => {
     try {
-      const token = localStorage.getItem('token')
-      const response = await axios.get('/leases', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      const data = response.data.data || response.data.items || response.data
-      setLeases(Array.isArray(data) ? data : [])
+      const [leasesRes, propertiesRes, tenantsRes] = await Promise.all([
+        apiClient.get("/leases"),
+        apiClient.get("/properties"),
+        apiClient.get("/tenants"),
+      ]);
+
+      const leasesData =
+        leasesRes.data?.data?.leases ||
+        leasesRes.data?.leases ||
+        leasesRes.data?.data ||
+        leasesRes.data ||
+        [];
+      const propertiesData =
+        propertiesRes.data?.data?.properties ||
+        propertiesRes.data?.properties ||
+        propertiesRes.data?.data ||
+        propertiesRes.data ||
+        [];
+      const tenantsData =
+        tenantsRes.data?.data?.tenants ||
+        tenantsRes.data?.tenants ||
+        tenantsRes.data?.data ||
+        tenantsRes.data ||
+        [];
+
+      setLeases(Array.isArray(leasesData) ? leasesData : []);
+      setProperties(Array.isArray(propertiesData) ? propertiesData : []);
+      setTenants(Array.isArray(tenantsData) ? tenantsData : []);
     } catch (error) {
-      console.error('Error fetching leases:', error)
-      setLeases([])
-      setError('Failed to load leases')
+      console.error("Error fetching data:", error);
+      setError("Failed to load data");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
-
-  const fetchProperties = async () => {
-    try {
-      const token = localStorage.getItem('token')
-      const response = await axios.get('/properties', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      const data = response.data.data || response.data
-      setProperties(Array.isArray(data) ? data : [])
-    } catch (error) {
-      console.error('Error fetching properties:', error)
-      setProperties([])
-    }
-  }
-
-  const fetchTenants = async () => {
-    try {
-      const token = localStorage.getItem('token')
-      const response = await axios.get('/tenants', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      const data = response.data.data || response.data.items || response.data
-      setTenants(Array.isArray(data) ? data : [])
-    } catch (error) {
-      console.error('Error fetching tenants:', error)
-      setTenants([])
-    }
-  }
+  };
 
   const handleOpenModal = (lease = null) => {
     if (lease) {
-      setEditingLease(lease)
+      setEditingLease(lease);
       setFormData({
-        propertyId: lease.propertyId || '',
-        tenantId: lease.tenantId || '',
-        startDate: lease.startDate ? new Date(lease.startDate).toISOString().split('T')[0] : '',
-        endDate: lease.endDate ? new Date(lease.endDate).toISOString().split('T')[0] : '',
-        rentAmount: lease.rentAmount || '',
-        paymentDayOfMonth: lease.paymentDayOfMonth || '1'
-      })
+        propertyId: lease.propertyId || "",
+        tenantId: lease.tenantId || "",
+        startDate: lease.startDate
+          ? new Date(lease.startDate).toISOString().split("T")[0]
+          : "",
+        endDate: lease.endDate
+          ? new Date(lease.endDate).toISOString().split("T")[0]
+          : "",
+        rentAmount: lease.rentAmount?.toString() || "",
+        paymentDayOfMonth: lease.paymentDayOfMonth?.toString() || "1",
+      });
     } else {
-      setEditingLease(null)
+      setEditingLease(null);
       setFormData({
-        propertyId: '',
-        tenantId: '',
-        startDate: '',
-        endDate: '',
-        rentAmount: '',
-        paymentDayOfMonth: '1'
-      })
+        propertyId: "",
+        tenantId: "",
+        startDate: "",
+        endDate: "",
+        rentAmount: "",
+        paymentDayOfMonth: "1",
+      });
     }
-    setError('')
-    setShowModal(true)
-  }
+    setError("");
+    setShowModal(true);
+  };
 
   const handleCloseModal = () => {
-    setShowModal(false)
-    setEditingLease(null)
-    setError('')
-  }
+    setShowModal(false);
+    setEditingLease(null);
+    setFormData({
+      propertyId: "",
+      tenantId: "",
+      startDate: "",
+      endDate: "",
+      rentAmount: "",
+      paymentDayOfMonth: "1",
+    });
+    setError("");
+  };
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
-    setError('')
+    e.preventDefault();
+    setError("");
+
     try {
-      const token = localStorage.getItem('token')
       const payload = {
-        propertyId: formData.propertyId,
-        tenantId: formData.tenantId,
-        startDate: formData.startDate,
-        endDate: formData.endDate || undefined,
+        ...formData,
         rentAmount: parseInt(formData.rentAmount),
-        paymentDayOfMonth: parseInt(formData.paymentDayOfMonth)
-      }
+        paymentDayOfMonth: parseInt(formData.paymentDayOfMonth),
+      };
 
       if (editingLease) {
-        await axios.put(`/leases/${editingLease.id}`, payload, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        setSuccess('Lease updated successfully')
+        await apiClient.put(`/leases/${editingLease.id}`, payload);
+        setSuccess("Lease updated successfully");
       } else {
-        await axios.post('/leases', payload, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        setSuccess('Lease created successfully')
+        await apiClient.post("/leases", payload);
+        setSuccess("Lease created successfully");
       }
-
-      handleCloseModal()
-      fetchLeases()
-      setTimeout(() => setSuccess(''), 3000)
+      handleCloseModal();
+      fetchData();
+      setTimeout(() => setSuccess(""), 3000);
     } catch (error) {
-      console.error('Error saving lease:', error)
-      setError(error.response?.data?.error || 'Failed to save lease')
+      console.error("Error saving lease:", error);
+      setError(error.response?.data?.error || "Failed to save lease");
     }
-  }
+  };
 
-  const handleDelete = async (lease) => {
-    const tenantName = lease.tenant?.name || 'this lease'
-    if (!window.confirm(`Are you sure you want to delete the lease for "${tenantName}"? This action cannot be undone.`)) {
-      return
+  const getLeaseStatus = (lease) => {
+    const now = new Date();
+    const start = new Date(lease.startDate);
+    const end = lease.endDate ? new Date(lease.endDate) : null;
+
+    if (now < start) return { label: "Upcoming", variant: "secondary" };
+    if (end && now > end) return { label: "Expired", variant: "destructive" };
+    if (end) {
+      const daysUntilEnd = Math.ceil((end - now) / (1000 * 60 * 60 * 24));
+      if (daysUntilEnd <= 30)
+        return { label: "Expiring Soon", variant: "warning" };
     }
+    return { label: "Active", variant: "default" };
+  };
 
-    try {
-      const token = localStorage.getItem('token')
-      await axios.delete(`/leases/${lease.id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      setSuccess('Lease deleted successfully')
-      fetchLeases()
-      setTimeout(() => setSuccess(''), 3000)
-    } catch (error) {
-      console.error('Error deleting lease:', error)
-      setError(error.response?.data?.error || 'Failed to delete lease')
-      setTimeout(() => setError(''), 3000)
-    }
-  }
+  const filteredLeases = leases.filter((lease) => {
+    const property = properties.find((p) => p.id === lease.propertyId);
+    const tenant = tenants.find((t) => t.id === lease.tenantId);
+    const status = getLeaseStatus(lease);
 
-  const filteredLeases = leases.filter((lease) =>
-    lease.tenant_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    lease.property_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    lease.unit_number?.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+    const matchesSearch =
+      property?.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      tenant?.name?.toLowerCase().includes(searchTerm.toLowerCase());
 
-  const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
-      case 'active':
-        return 'default'
-      case 'expired':
-        return 'destructive'
-      case 'pending':
-        return 'secondary'
-      case 'terminated':
-        return 'outline'
-      default:
-        return 'outline'
-    }
-  }
+    const matchesStatus =
+      filterStatus === "all" ||
+      status.label.toLowerCase() === filterStatus.toLowerCase();
 
-  const getExpiryWarning = (endDate) => {
-    const today = new Date()
-    const end = new Date(endDate)
-    const daysUntilExpiry = Math.ceil((end - today) / (1000 * 60 * 60 * 24))
-    
-    if (daysUntilExpiry < 0) return { show: true, text: 'Expired', color: 'text-red-600' }
-    if (daysUntilExpiry <= 30) return { show: true, text: `${daysUntilExpiry} days left`, color: 'text-orange-600' }
-    return { show: false }
-  }
-
-  const activeLeases = leases.filter(l => l.status?.toLowerCase() === 'active').length
-  const expiringLeases = leases.filter(l => {
-    const warning = getExpiryWarning(l.end_date)
-    return warning.show && warning.text !== 'Expired'
-  }).length
+    return matchesSearch && matchesStatus;
+  });
 
   if (loading) {
     return (
       <div className="flex h-96 items-center justify-center">
         <div className="text-muted-foreground">Loading leases...</div>
       </div>
-    )
+    );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {success && (
         <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg">
           {success}
@@ -222,298 +203,292 @@ const Leases = () => {
           {error}
         </div>
       )}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Leases</h1>
-          <p className="text-muted-foreground">
-            Manage tenant lease agreements
+
+      <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-2">
+          <h1 className="text-4xl font-bold tracking-tight text-gray-900">
+            Leases
+          </h1>
+          <p className="text-lg text-gray-600">
+            Manage property lease agreements
           </p>
+          <div className="flex items-center gap-4 text-sm text-gray-500">
+            <span>{filteredLeases.length} leases</span>
+          </div>
         </div>
-        <Button onClick={() => handleOpenModal()}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Lease
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            onClick={() => setShowFilters(!showFilters)}
+          >
+            <Filter className="h-4 w-4 mr-2" />
+            Filters
+          </Button>
+          <Button onClick={() => handleOpenModal()}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Lease
+          </Button>
+        </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Leases</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{activeLeases}</div>
-            <p className="text-xs text-muted-foreground">Currently active</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Expiring Soon</CardTitle>
-            <AlertCircle className="h-4 w-4 text-orange-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{expiringLeases}</div>
-            <p className="text-xs text-muted-foreground">Within 30 days</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Leases</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{leases.length}</div>
-            <p className="text-xs text-muted-foreground">All time</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="flex items-center space-x-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <div className="space-y-4">
+        <div className="relative max-w-2xl">
+          <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
           <Input
-            placeholder="Search leases..."
+            placeholder="Search leases by property or tenant..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
+            className="pl-12 h-12"
           />
         </div>
+
+        {showFilters && (
+          <Card className="p-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Status
+                </label>
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                >
+                  <option value="all">All Status</option>
+                  <option value="active">Active</option>
+                  <option value="upcoming">Upcoming</option>
+                  <option value="expiring soon">Expiring Soon</option>
+                  <option value="expired">Expired</option>
+                </select>
+              </div>
+            </div>
+          </Card>
+        )}
       </div>
 
-      <div className="grid gap-4">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {filteredLeases.map((lease) => {
-          const expiryWarning = getExpiryWarning(lease.end_date)
+          const property = properties.find((p) => p.id === lease.propertyId);
+          const tenant = tenants.find((t) => t.id === lease.tenantId);
+          const status = getLeaseStatus(lease);
+
           return (
-            <Card key={lease.id} className="hover:shadow-md transition-shadow">
+            <Card key={lease.id} className="hover:shadow-lg transition-shadow">
               <CardHeader>
                 <div className="flex items-start justify-between">
-                  <div className="space-y-1">
-                    <CardTitle className="text-xl">{lease.tenant_name || 'Unknown Tenant'}</CardTitle>
-                    <CardDescription>
-                      {lease.property_name} - Unit {lease.unit_number || 'N/A'}
-                    </CardDescription>
-                  </div>
-                  <div className="flex gap-2">
-                    <Badge variant={getStatusColor(lease.status)}>
-                      {lease.status || 'N/A'}
-                    </Badge>
-                    {expiryWarning.show && (
-                      <Badge variant="outline" className={expiryWarning.color}>
-                        <AlertCircle className="mr-1 h-3 w-3" />
-                        {expiryWarning.text}
+                  <div className="flex items-center space-x-3">
+                    <div className="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center">
+                      <FileText className="h-6 w-6 text-purple-600" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg">
+                        {property?.title || "Unknown Property"}
+                      </CardTitle>
+                      <Badge variant={status.variant} className="mt-1">
+                        {status.label}
                       </Badge>
-                    )}
+                    </div>
                   </div>
                 </div>
               </CardHeader>
-              <CardContent>
-                <div className="grid gap-4 md:grid-cols-3">
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Start Date:</span>
-                      <span className="font-medium">
-                        {lease.start_date ? new Date(lease.start_date).toLocaleDateString() : 'N/A'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">End Date:</span>
-                      <span className="font-medium">
-                        {lease.end_date ? new Date(lease.end_date).toLocaleDateString() : 'N/A'}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Monthly Rent:</span>
-                      <span className="font-medium">
-                        KSh {parseFloat(lease.rent_amount || 0).toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Security Deposit:</span>
-                      <span className="font-medium">
-                        KSh {parseFloat(lease.security_deposit || 0).toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Payment Day:</span>
-                      <span className="font-medium">{lease.payment_day || 'N/A'}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Duration:</span>
-                      <span className="font-medium">
-                        {lease.duration_months || 'N/A'} months
-                      </span>
-                    </div>
-                  </div>
+              <CardContent className="space-y-3">
+                <div className="flex items-center text-sm text-gray-600">
+                  <User className="h-4 w-4 mr-2" />
+                  {tenant?.name || "Unknown Tenant"}
                 </div>
-                <div className="mt-4 flex gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="flex-1"
-                    onClick={() => handleOpenModal(lease)}
-                  >
-                    <Edit className="mr-1 h-3 w-3" />
-                    Edit
-                  </Button>
-                  <Button 
-                    variant="ghost" 
+                <div className="flex items-center text-sm text-gray-600">
+                  <DollarSign className="h-4 w-4 mr-2" />
+                  KSh {lease.rentAmount?.toLocaleString()}/month
+                </div>
+                <div className="flex items-center text-sm text-gray-600">
+                  <Calendar className="h-4 w-4 mr-2" />
+                  {new Date(lease.startDate).toLocaleDateString()} -{" "}
+                  {lease.endDate
+                    ? new Date(lease.endDate).toLocaleDateString()
+                    : "Ongoing"}
+                </div>
+                <div className="flex items-center text-sm text-gray-600">
+                  <AlertCircle className="h-4 w-4 mr-2" />
+                  Payment due: Day {lease.paymentDayOfMonth}
+                </div>
+
+                <div className="flex gap-2 pt-4">
+                  <Button
+                    variant="outline"
                     size="sm"
-                    onClick={() => handleDelete(lease)}
-                    className="text-red-600 hover:text-red-700"
+                    onClick={() => handleOpenModal(lease)}
+                    className="flex-1"
                   >
-                    <Trash2 className="h-3 w-3" />
+                    Edit
                   </Button>
                 </div>
               </CardContent>
             </Card>
-          )
+          );
         })}
       </div>
 
       {filteredLeases.length === 0 && (
-        <div className="flex h-64 items-center justify-center">
-          <div className="text-center">
-            <p className="text-muted-foreground">No leases found</p>
-            <Button className="mt-4" onClick={() => handleOpenModal()}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Your First Lease
-            </Button>
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <FileText className="h-16 w-16 text-gray-400 mb-4" />
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">
+            No leases found
+          </h3>
+          <p className="text-gray-600 mb-8">
+            {searchTerm || filterStatus !== "all"
+              ? "Try adjusting your filters"
+              : "Get started by creating your first lease"}
+          </p>
+          <Button onClick={() => handleOpenModal()}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Lease
+          </Button>
+        </div>
+      )}
+
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold">
+                {editingLease ? "Edit Lease" : "Add New Lease"}
+              </h2>
+              <button
+                onClick={handleCloseModal}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Property *
+                </label>
+                <select
+                  value={formData.propertyId}
+                  onChange={(e) =>
+                    setFormData({ ...formData, propertyId: e.target.value })
+                  }
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                >
+                  <option value="">Select Property</option>
+                  {properties.map((property) => (
+                    <option key={property.id} value={property.id}>
+                      {property.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Tenant *
+                </label>
+                <select
+                  value={formData.tenantId}
+                  onChange={(e) =>
+                    setFormData({ ...formData, tenantId: e.target.value })
+                  }
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                >
+                  <option value="">Select Tenant</option>
+                  {tenants.map((tenant) => (
+                    <option key={tenant.id} value={tenant.id}>
+                      {tenant.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Start Date *
+                </label>
+                <Input
+                  type="date"
+                  value={formData.startDate}
+                  onChange={(e) =>
+                    setFormData({ ...formData, startDate: e.target.value })
+                  }
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  End Date
+                </label>
+                <Input
+                  type="date"
+                  value={formData.endDate}
+                  onChange={(e) =>
+                    setFormData({ ...formData, endDate: e.target.value })
+                  }
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Rent Amount (KSh) *
+                </label>
+                <Input
+                  type="number"
+                  value={formData.rentAmount}
+                  onChange={(e) =>
+                    setFormData({ ...formData, rentAmount: e.target.value })
+                  }
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Payment Day of Month *
+                </label>
+                <Input
+                  type="number"
+                  min="1"
+                  max="31"
+                  value={formData.paymentDayOfMonth}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      paymentDayOfMonth: e.target.value,
+                    })
+                  }
+                  required
+                />
+              </div>
+
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-800 px-3 py-2 rounded text-sm">
+                  {error}
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleCloseModal}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" className="flex-1">
+                  {editingLease ? "Update" : "Create"}
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       )}
-
-      {/* Create/Edit Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>
-                  {editingLease ? 'Edit Lease' : 'Create New Lease'}
-                </CardTitle>
-                <Button variant="ghost" size="sm" onClick={handleCloseModal}>
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                {error && (
-                  <div className="bg-red-50 border border-red-200 text-red-800 px-3 py-2 rounded text-sm">
-                    {error}
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Property *</label>
-                    <select
-                      required
-                      value={formData.propertyId}
-                      onChange={(e) => setFormData({ ...formData, propertyId: e.target.value })}
-                      className="w-full px-3 py-2 border rounded-md"
-                    >
-                      <option value="">Select Property</option>
-                      {properties.map((property) => (
-                        <option key={property.id} value={property.id}>
-                          {property.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Tenant *</label>
-                    <select
-                      required
-                      value={formData.tenantId}
-                      onChange={(e) => setFormData({ ...formData, tenantId: e.target.value })}
-                      className="w-full px-3 py-2 border rounded-md"
-                    >
-                      <option value="">Select Tenant</option>
-                      {tenants.map((tenant) => (
-                        <option key={tenant.id} value={tenant.id}>
-                          {tenant.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Start Date *</label>
-                    <Input
-                      type="date"
-                      required
-                      value={formData.startDate}
-                      onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-1">End Date</label>
-                    <Input
-                      type="date"
-                      value={formData.endDate}
-                      onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Monthly Rent (KSh) *</label>
-                    <Input
-                      type="number"
-                      required
-                      min="1"
-                      value={formData.rentAmount}
-                      onChange={(e) => setFormData({ ...formData, rentAmount: e.target.value })}
-                      placeholder="e.g., 25000"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Payment Day of Month *</label>
-                    <Input
-                      type="number"
-                      required
-                      min="1"
-                      max="28"
-                      value={formData.paymentDayOfMonth}
-                      onChange={(e) => setFormData({ ...formData, paymentDayOfMonth: e.target.value })}
-                      placeholder="1-28"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex gap-2 pt-4">
-                  <Button type="submit" className="flex-1">
-                    {editingLease ? 'Update Lease' : 'Create Lease'}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleCloseModal}
-                    className="flex-1"
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
-      )}
     </div>
-  )
-}
+  );
+};
 
-export default Leases
+export default Leases;

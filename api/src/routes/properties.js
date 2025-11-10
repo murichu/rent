@@ -49,6 +49,7 @@ const propertySchema = z.object({
     "TWO_BEDROOM",
     "THREE_BEDROOM",
     "FOUR_BEDROOM",
+    "APARTMENT",
     "MAISONETTE",
     "BUNGALOW",
     "SERVANT_QUARTER",

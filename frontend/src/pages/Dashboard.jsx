@@ -61,10 +61,6 @@ const Dashboard = () => {
     },
   ]);
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, [fetchDashboardData]);
-
   const fetchDashboardData = async () => {
     const startTime = performance.now();
 
@@ -84,9 +80,50 @@ const Dashboard = () => {
         apiClient.get("/payments"),
       ]);
 
-      const properties = propertiesRes.data;
-      const tenants = tenantsRes.data;
-      const payments = paymentsRes.data;
+      // Handle nested response structure properly
+      let properties = [];
+      if (propertiesRes.data) {
+        if (propertiesRes.data.data && propertiesRes.data.data.properties) {
+          properties = propertiesRes.data.data.properties;
+        } else if (propertiesRes.data.properties) {
+          properties = propertiesRes.data.properties;
+        } else if (Array.isArray(propertiesRes.data.data)) {
+          properties = propertiesRes.data.data;
+        } else if (Array.isArray(propertiesRes.data)) {
+          properties = propertiesRes.data;
+        }
+      }
+
+      let tenants = [];
+      if (tenantsRes.data) {
+        if (tenantsRes.data.data && tenantsRes.data.data.tenants) {
+          tenants = tenantsRes.data.data.tenants;
+        } else if (tenantsRes.data.tenants) {
+          tenants = tenantsRes.data.tenants;
+        } else if (Array.isArray(tenantsRes.data.data)) {
+          tenants = tenantsRes.data.data;
+        } else if (Array.isArray(tenantsRes.data)) {
+          tenants = tenantsRes.data;
+        }
+      }
+
+      let payments = [];
+      if (paymentsRes.data) {
+        if (paymentsRes.data.data && paymentsRes.data.data.payments) {
+          payments = paymentsRes.data.data.payments;
+        } else if (paymentsRes.data.payments) {
+          payments = paymentsRes.data.payments;
+        } else if (Array.isArray(paymentsRes.data.data)) {
+          payments = paymentsRes.data.data;
+        } else if (Array.isArray(paymentsRes.data)) {
+          payments = paymentsRes.data;
+        }
+      }
+
+      // Ensure all are arrays
+      properties = Array.isArray(properties) ? properties : [];
+      tenants = Array.isArray(tenants) ? tenants : [];
+      payments = Array.isArray(payments) ? payments : [];
 
       // Log successful data fetch
       const fetchTime = performance.now() - startTime;
@@ -242,6 +279,11 @@ const Dashboard = () => {
     }
   };
 
+  useEffect(() => {
+    fetchDashboardData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Calculate trends
   const getRevenueTrend = () => {
     if (stats.previousMonthRevenue === 0)
@@ -346,7 +388,7 @@ const Dashboard = () => {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground">
-            Welcome back! Here's an overview of your property management.
+            Welcome back! Here&apos;s an overview of your property management.
           </p>
         </div>
 
@@ -473,7 +515,7 @@ const Dashboard = () => {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground">
-            Welcome back! Here's an overview of your property management.
+            Welcome back! Here&apos;s an overview of your property management.
           </p>
         </div>
 
