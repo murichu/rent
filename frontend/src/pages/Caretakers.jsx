@@ -1,171 +1,195 @@
-import { useEffect, useState } from 'react'
-import { Plus, Search, Phone, Mail, Edit, Trash2, X } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
-import axios from 'axios'
+import { useEffect, useState } from "react";
+import {
+  Plus,
+  Search,
+  MapPin,
+  Phone,
+  Mail,
+  Edit,
+  Trash2,
+  X,
+} from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import axios from "axios";
 
 const Caretakers = () => {
-  const [caretakers, setCaretakers] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState('')
-  const [showModal, setShowModal] = useState(false)
-  const [editingCaretaker, setEditingCaretaker] = useState(null)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
+  const [caretakers, setCaretakers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showModal, setShowModal] = useState(false);
+  const [editingCaretaker, setEditingCaretaker] = useState(null);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [formData, setFormData] = useState({
-    name: '',
-    phone: '',
-    email: '',
-    idNumber: '',
-    paymentType: 'SALARY',
-    salaryAmount: '',
-    commissionRate: '0',
-    commissionType: 'PERCENTAGE'
-  })
+    name: "",
+    phone: "",
+    email: "",
+    idNumber: "",
+    paymentType: "SALARY",
+    salaryAmount: "",
+    commissionRate: "0",
+    commissionType: "PERCENTAGE",
+  });
 
   useEffect(() => {
-    fetchCaretakers()
-  }, [])
+    fetchCaretakers();
+  }, []);
 
   const fetchCaretakers = async () => {
     try {
-      const token = localStorage.getItem('token')
-      const response = await axios.get('/caretakers', {
+      const token = localStorage.getItem("token");
+      const response = await axios.get("http://localhost:4000/api/caretakers", {
         headers: { Authorization: `Bearer ${token}` },
-      })
-      const data = response.data.data || response.data
-      setCaretakers(Array.isArray(data) ? data : [])
+      });
+      const data = response.data.data || response.data;
+      setCaretakers(Array.isArray(data) ? data : []);
     } catch (error) {
-      console.error('Error fetching caretakers:', error)
-      setCaretakers([])
-      setError('Failed to load caretakers')
+      console.error("Error fetching caretakers:", error);
+      setCaretakers([]);
+      setError("Failed to load caretakers");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleOpenModal = (caretaker = null) => {
     if (caretaker) {
-      setEditingCaretaker(caretaker)
+      setEditingCaretaker(caretaker);
       setFormData({
-        name: caretaker.name || '',
-        phone: caretaker.phone || '',
-        email: caretaker.email || '',
-        idNumber: caretaker.idNumber || '',
-        paymentType: caretaker.paymentType || 'SALARY',
-        salaryAmount: caretaker.salaryAmount || '',
-        commissionRate: caretaker.commissionRate || '0',
-        commissionType: caretaker.commissionType || 'PERCENTAGE'
-      })
+        name: caretaker.name || "",
+        phone: caretaker.phone || "",
+        email: caretaker.email || "",
+        idNumber: caretaker.idNumber || "",
+        paymentType: caretaker.paymentType || "SALARY",
+        salaryAmount: caretaker.salaryAmount || "",
+        commissionRate: caretaker.commissionRate || "0",
+        commissionType: caretaker.commissionType || "PERCENTAGE",
+      });
     } else {
-      setEditingCaretaker(null)
+      setEditingCaretaker(null);
       setFormData({
-        name: '',
-        phone: '',
-        email: '',
-        idNumber: '',
-        paymentType: 'SALARY',
-        salaryAmount: '',
-        commissionRate: '0',
-        commissionType: 'PERCENTAGE'
-      })
+        name: "",
+        phone: "",
+        email: "",
+        idNumber: "",
+        paymentType: "SALARY",
+        salaryAmount: "",
+        commissionRate: "0",
+        commissionType: "PERCENTAGE",
+      });
     }
-    setError('')
-    setShowModal(true)
-  }
+    setError("");
+    setShowModal(true);
+  };
 
   const handleCloseModal = () => {
-    setShowModal(false)
-    setEditingCaretaker(null)
-    setError('')
-  }
+    setShowModal(false);
+    setEditingCaretaker(null);
+    setError("");
+  };
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
-    setError('')
+    e.preventDefault();
+    setError("");
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem("token");
       const payload = {
         name: formData.name,
         phone: formData.phone,
         email: formData.email || undefined,
         idNumber: formData.idNumber || undefined,
         paymentType: formData.paymentType,
-        salaryAmount: formData.salaryAmount ? parseFloat(formData.salaryAmount) : undefined,
+        salaryAmount: formData.salaryAmount
+          ? parseFloat(formData.salaryAmount)
+          : undefined,
         commissionRate: parseFloat(formData.commissionRate),
-        commissionType: formData.commissionType
-      }
+        commissionType: formData.commissionType,
+      };
 
       if (editingCaretaker) {
         await axios.put(`/caretakers/${editingCaretaker.id}`, payload, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        setSuccess('Caretaker updated successfully')
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setSuccess("Caretaker updated successfully");
       } else {
-        await axios.post('/caretakers', payload, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        setSuccess('Caretaker created successfully')
+        await axios.post("/caretakers", payload, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setSuccess("Caretaker created successfully");
       }
 
-      handleCloseModal()
-      fetchCaretakers()
-      setTimeout(() => setSuccess(''), 3000)
+      handleCloseModal();
+      fetchCaretakers();
+      setTimeout(() => setSuccess(""), 3000);
     } catch (error) {
-      console.error('Error saving caretaker:', error)
-      setError(error.response?.data?.error || 'Failed to save caretaker')
+      console.error("Error saving caretaker:", error);
+      setError(error.response?.data?.error || "Failed to save caretaker");
     }
-  }
+  };
 
   const handleDelete = async (caretaker) => {
-    if (!window.confirm(`Are you sure you want to delete "${caretaker.name}"? This action cannot be undone.`)) {
-      return
+    if (
+      !window.confirm(
+        `Are you sure you want to delete "${caretaker.name}"? This action cannot be undone.`
+      )
+    ) {
+      return;
     }
 
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem("token");
       await axios.delete(`/caretakers/${caretaker.id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      setSuccess('Caretaker deleted successfully')
-      fetchCaretakers()
-      setTimeout(() => setSuccess(''), 3000)
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setSuccess("Caretaker deleted successfully");
+      fetchCaretakers();
+      setTimeout(() => setSuccess(""), 3000);
     } catch (error) {
-      console.error('Error deleting caretaker:', error)
-      setError(error.response?.data?.error || 'Failed to delete caretaker')
-      setTimeout(() => setError(''), 3000)
+      console.error("Error deleting caretaker:", error);
+      setError(error.response?.data?.error || "Failed to delete caretaker");
+      setTimeout(() => setError(""), 3000);
     }
-  }
+  };
 
-  const filteredCaretakers = caretakers.filter((caretaker) =>
-    caretaker.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    caretaker.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    caretaker.phone?.includes(searchTerm)
-  )
+  const filteredCaretakers = caretakers.filter(
+    (caretaker) =>
+      caretaker.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      caretaker.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      caretaker.phone?.includes(searchTerm)
+  );
 
   const getStatusColor = (status) => {
     switch (status?.toLowerCase()) {
-      case 'active':
-        return 'default'
-      case 'inactive':
-        return 'secondary'
-      case 'on_leave':
-        return 'outline'
+      case "active":
+        return "default";
+      case "inactive":
+        return "secondary";
+      case "on_leave":
+        return "outline";
       default:
-        return 'outline'
+        return "outline";
     }
-  }
+  };
 
-  const activeCaretakers = caretakers.filter(c => c.status?.toLowerCase() === 'active').length
+  const activeCaretakers = caretakers.filter(
+    (c) => c.status?.toLowerCase() === "active"
+  ).length;
 
   if (loading) {
     return (
       <div className="flex h-96 items-center justify-center">
         <div className="text-muted-foreground">Loading caretakers...</div>
       </div>
-    )
+    );
   }
 
   return (
@@ -197,18 +221,24 @@ const Caretakers = () => {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Caretakers</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Total Caretakers
+            </CardTitle>
             <MapPin className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{caretakers.length}</div>
-            <p className="text-xs text-muted-foreground">Registered caretakers</p>
+            <p className="text-xs text-muted-foreground">
+              Registered caretakers
+            </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Caretakers</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Active Caretakers
+            </CardTitle>
             <MapPin className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
@@ -219,7 +249,9 @@ const Caretakers = () => {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Properties Covered</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Properties Covered
+            </CardTitle>
             <MapPin className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
@@ -245,17 +277,22 @@ const Caretakers = () => {
 
       <div className="grid gap-4 md:grid-cols-2">
         {filteredCaretakers.map((caretaker) => (
-          <Card key={caretaker.id} className="hover:shadow-md transition-shadow">
+          <Card
+            key={caretaker.id}
+            className="hover:shadow-md transition-shadow"
+          >
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div className="space-y-1">
-                  <CardTitle className="text-xl">{caretaker.name || 'Unknown Caretaker'}</CardTitle>
+                  <CardTitle className="text-xl">
+                    {caretaker.name || "Unknown Caretaker"}
+                  </CardTitle>
                   <CardDescription>
-                    {caretaker.property_name || 'No property assigned'}
+                    {caretaker.property_name || "No property assigned"}
                   </CardDescription>
                 </div>
                 <Badge variant={getStatusColor(caretaker.status)}>
-                  {caretaker.status || 'N/A'}
+                  {caretaker.status || "N/A"}
                 </Badge>
               </div>
             </CardHeader>
@@ -264,11 +301,11 @@ const Caretakers = () => {
                 <div className="space-y-3">
                   <div className="flex items-center text-sm">
                     <Mail className="mr-2 h-4 w-4 text-muted-foreground" />
-                    <span>{caretaker.email || 'N/A'}</span>
+                    <span>{caretaker.email || "N/A"}</span>
                   </div>
                   <div className="flex items-center text-sm">
                     <Phone className="mr-2 h-4 w-4 text-muted-foreground" />
-                    <span>{caretaker.phone || 'N/A'}</span>
+                    <span>{caretaker.phone || "N/A"}</span>
                   </div>
                   {caretaker.address && (
                     <div className="flex items-center text-sm">
@@ -281,10 +318,14 @@ const Caretakers = () => {
                 <div className="grid grid-cols-2 gap-4 pt-4 border-t">
                   <div>
                     <p className="text-sm text-muted-foreground">Properties</p>
-                    <p className="text-lg font-semibold">{caretaker.property_count || 0}</p>
+                    <p className="text-lg font-semibold">
+                      {caretaker.property_count || 0}
+                    </p>
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Monthly Salary</p>
+                    <p className="text-sm text-muted-foreground">
+                      Monthly Salary
+                    </p>
                     <p className="text-lg font-semibold">
                       KSh {parseFloat(caretaker.salary || 0).toLocaleString()}
                     </p>
@@ -292,15 +333,15 @@ const Caretakers = () => {
                   <div>
                     <p className="text-sm text-muted-foreground">Start Date</p>
                     <p className="text-sm font-medium">
-                      {caretaker.start_date 
+                      {caretaker.start_date
                         ? new Date(caretaker.start_date).toLocaleDateString()
-                        : 'N/A'}
+                        : "N/A"}
                     </p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Rating</p>
                     <p className="text-lg font-semibold">
-                      {caretaker.rating ? `${caretaker.rating}/5` : 'N/A'}
+                      {caretaker.rating ? `${caretaker.rating}/5` : "N/A"}
                     </p>
                   </div>
                 </div>
@@ -313,17 +354,17 @@ const Caretakers = () => {
                 )}
 
                 <div className="mt-4 flex gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     className="flex-1"
                     onClick={() => handleOpenModal(caretaker)}
                   >
                     <Edit className="mr-1 h-3 w-3" />
                     Edit
                   </Button>
-                  <Button 
-                    variant="ghost" 
+                  <Button
+                    variant="ghost"
                     size="sm"
                     onClick={() => handleDelete(caretaker)}
                     className="text-red-600 hover:text-red-700"
@@ -356,7 +397,7 @@ const Caretakers = () => {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>
-                  {editingCaretaker ? 'Edit Caretaker' : 'Add New Caretaker'}
+                  {editingCaretaker ? "Edit Caretaker" : "Add New Caretaker"}
                 </CardTitle>
                 <Button variant="ghost" size="sm" onClick={handleCloseModal}>
                   <X className="h-4 w-4" />
@@ -373,21 +414,29 @@ const Caretakers = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1">Full Name *</label>
+                    <label className="block text-sm font-medium mb-1">
+                      Full Name *
+                    </label>
                     <Input
                       required
                       value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, name: e.target.value })
+                      }
                       placeholder="e.g., John Doe"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-1">Phone Number *</label>
+                    <label className="block text-sm font-medium mb-1">
+                      Phone Number *
+                    </label>
                     <Input
                       required
                       value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, phone: e.target.value })
+                      }
                       placeholder="+254 700 000000"
                     />
                   </div>
@@ -395,31 +444,43 @@ const Caretakers = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1">Email</label>
+                    <label className="block text-sm font-medium mb-1">
+                      Email
+                    </label>
                     <Input
                       type="email"
                       value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, email: e.target.value })
+                      }
                       placeholder="john@example.com"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-1">ID Number</label>
+                    <label className="block text-sm font-medium mb-1">
+                      ID Number
+                    </label>
                     <Input
                       value={formData.idNumber}
-                      onChange={(e) => setFormData({ ...formData, idNumber: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, idNumber: e.target.value })
+                      }
                       placeholder="12345678"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-1">Payment Type *</label>
+                  <label className="block text-sm font-medium mb-1">
+                    Payment Type *
+                  </label>
                   <select
                     required
                     value={formData.paymentType}
-                    onChange={(e) => setFormData({ ...formData, paymentType: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, paymentType: e.target.value })
+                    }
                     className="w-full px-3 py-2 border rounded-md"
                   >
                     <option value="SALARY">Salary</option>
@@ -428,23 +489,34 @@ const Caretakers = () => {
                   </select>
                 </div>
 
-                {(formData.paymentType === 'SALARY' || formData.paymentType === 'MIXED') && (
+                {(formData.paymentType === "SALARY" ||
+                  formData.paymentType === "MIXED") && (
                   <div>
-                    <label className="block text-sm font-medium mb-1">Monthly Salary (KSh)</label>
+                    <label className="block text-sm font-medium mb-1">
+                      Monthly Salary (KSh)
+                    </label>
                     <Input
                       type="number"
                       min="0"
                       value={formData.salaryAmount}
-                      onChange={(e) => setFormData({ ...formData, salaryAmount: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          salaryAmount: e.target.value,
+                        })
+                      }
                       placeholder="e.g., 15000"
                     />
                   </div>
                 )}
 
-                {(formData.paymentType === 'COMMISSION' || formData.paymentType === 'MIXED') && (
+                {(formData.paymentType === "COMMISSION" ||
+                  formData.paymentType === "MIXED") && (
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium mb-1">Commission Rate *</label>
+                      <label className="block text-sm font-medium mb-1">
+                        Commission Rate *
+                      </label>
                       <Input
                         type="number"
                         required
@@ -452,17 +524,29 @@ const Caretakers = () => {
                         max="100"
                         step="0.1"
                         value={formData.commissionRate}
-                        onChange={(e) => setFormData({ ...formData, commissionRate: e.target.value })}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            commissionRate: e.target.value,
+                          })
+                        }
                         placeholder="e.g., 10"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium mb-1">Commission Type *</label>
+                      <label className="block text-sm font-medium mb-1">
+                        Commission Type *
+                      </label>
                       <select
                         required
                         value={formData.commissionType}
-                        onChange={(e) => setFormData({ ...formData, commissionType: e.target.value })}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            commissionType: e.target.value,
+                          })
+                        }
                         className="w-full px-3 py-2 border rounded-md"
                       >
                         <option value="PERCENTAGE">Percentage</option>
@@ -474,7 +558,7 @@ const Caretakers = () => {
 
                 <div className="flex gap-2 pt-4">
                   <Button type="submit" className="flex-1">
-                    {editingCaretaker ? 'Update Caretaker' : 'Create Caretaker'}
+                    {editingCaretaker ? "Update Caretaker" : "Create Caretaker"}
                   </Button>
                   <Button
                     type="button"
@@ -491,7 +575,7 @@ const Caretakers = () => {
         </div>
       )}
     </div>
-  )
-}
+  );
+};
 
-export default Caretakers
+export default Caretakers;

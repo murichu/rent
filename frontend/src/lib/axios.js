@@ -1,9 +1,9 @@
-import axios from 'axios'
-import { API_ENDPOINTS } from '../config/api'
+import axios from "axios";
+import { API_ENDPOINTS } from "../config/api";
 
 // Import toast service for error notifications
 let toastService = null;
-import('../services/toastService').then(module => {
+import("../services/toastService").then((module) => {
   toastService = module.default;
 });
 
@@ -11,19 +11,19 @@ import('../services/toastService').then(module => {
  * Error Classification and Retry Logic
  */
 const ErrorTypes = {
-  NETWORK: 'network',
-  TIMEOUT: 'timeout',
-  AUTH: 'auth',
-  RATE_LIMIT: 'rate_limit',
-  SERVER: 'server',
-  CLIENT: 'client',
-  UNKNOWN: 'unknown'
+  NETWORK: "network",
+  TIMEOUT: "timeout",
+  AUTH: "auth",
+  RATE_LIMIT: "rate_limit",
+  SERVER: "server",
+  CLIENT: "client",
+  UNKNOWN: "unknown",
 };
 
 const RetryableErrors = [
   ErrorTypes.NETWORK,
   ErrorTypes.TIMEOUT,
-  ErrorTypes.SERVER
+  ErrorTypes.SERVER,
 ];
 
 /**
@@ -38,19 +38,19 @@ function generateCorrelationId() {
  */
 function classifyError(error) {
   if (!error.response) {
-    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+    if (error.code === "ECONNABORTED" || error.message.includes("timeout")) {
       return ErrorTypes.TIMEOUT;
     }
     return ErrorTypes.NETWORK;
   }
 
   const status = error.response.status;
-  
+
   if (status === 401) return ErrorTypes.AUTH;
   if (status === 429) return ErrorTypes.RATE_LIMIT;
   if (status >= 500) return ErrorTypes.SERVER;
   if (status >= 400) return ErrorTypes.CLIENT;
-  
+
   return ErrorTypes.UNKNOWN;
 }
 
@@ -69,7 +69,7 @@ function calculateRetryDelay(retryCount) {
   const baseDelay = 1000; // 1 second
   const maxDelay = 10000; // 10 seconds
   const delay = Math.min(baseDelay * Math.pow(2, retryCount), maxDelay);
-  
+
   // Add jitter to prevent thundering herd
   const jitter = Math.random() * 0.1 * delay;
   return delay + jitter;
@@ -79,51 +79,51 @@ function calculateRetryDelay(retryCount) {
  * Sleep function for retry delays
  */
 function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // Create axios instance with enhanced config
 const apiClient = axios.create({
-  baseURL: API_ENDPOINTS.BASE_URL,
+  baseURL: "http://localhost:4000",
   timeout: 30000, // 30 seconds timeout
   headers: {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   },
-})
+});
 
 // Request interceptor with enhanced features
 apiClient.interceptors.request.use(
   (config) => {
     // Add correlation ID for request tracking
     const correlationId = generateCorrelationId();
-    config.headers['X-Correlation-ID'] = correlationId;
+    config.headers["X-Correlation-ID"] = correlationId;
     config.metadata = { correlationId, startTime: Date.now() };
 
     // Add auth token
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem("token");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
 
     // Add user context if available
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
     if (user.id) {
-      config.headers['X-User-ID'] = user.id;
+      config.headers["X-User-ID"] = user.id;
     }
 
     // Log request in development
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === "development") {
       console.log(`🚀 API Request [${correlationId}]:`, {
         method: config.method?.toUpperCase(),
         url: config.url,
-        baseURL: config.baseURL
+        baseURL: config.baseURL,
       });
     }
 
     return config;
   },
   (error) => {
-    console.error('Request interceptor error:', error);
+    console.error("Request interceptor error:", error);
     return Promise.reject(error);
   }
 );
@@ -132,13 +132,16 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => {
     // Log successful response in development
-    if (process.env.NODE_ENV === 'development' && response.config.metadata) {
+    if (process.env.NODE_ENV === "development" && response.config.metadata) {
       const duration = Date.now() - response.config.metadata.startTime;
-      console.log(`✅ API Response [${response.config.metadata.correlationId}]:`, {
-        status: response.status,
-        duration: `${duration}ms`,
-        url: response.config.url
-      });
+      console.log(
+        `✅ API Response [${response.config.metadata.correlationId}]:`,
+        {
+          status: response.status,
+          duration: `${duration}ms`,
+          url: response.config.url,
+        }
+      );
     }
 
     return response;
@@ -148,11 +151,11 @@ apiClient.interceptors.response.use(
     const correlationId = originalRequest?.metadata?.correlationId;
 
     // Log error in development
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === "development") {
       console.error(`❌ API Error [${correlationId}]:`, {
         status: error.response?.status,
         message: error.message,
-        url: originalRequest?.url
+        url: originalRequest?.url,
       });
     }
 
@@ -187,19 +190,20 @@ apiClient.interceptors.response.use(
  * Handle authentication errors
  */
 function handleAuthError(error) {
-  const isTokenExpired = error.response?.data?.error?.includes('expired') ||
-                        error.response?.data?.error?.includes('invalid');
+  const isTokenExpired =
+    error.response?.data?.error?.includes("expired") ||
+    error.response?.data?.error?.includes("invalid");
 
   if (isTokenExpired) {
     // Try to refresh token
-    const refreshToken = localStorage.getItem('refreshToken');
+    const refreshToken = localStorage.getItem("refreshToken");
     if (refreshToken) {
       attemptTokenRefresh(refreshToken);
     } else {
-      redirectToLogin('Session expired. Please log in again.');
+      redirectToLogin("Session expired. Please log in again.");
     }
   } else {
-    redirectToLogin('Authentication required.');
+    redirectToLogin("Authentication required.");
   }
 }
 
@@ -208,26 +212,29 @@ function handleAuthError(error) {
  */
 async function attemptTokenRefresh(refreshToken) {
   try {
-    const response = await axios.post(`${API_ENDPOINTS.BASE_URL}/auth/refresh`, {
-      refreshToken
-    });
+    const response = await axios.post(
+      `${API_ENDPOINTS.BASE_URL}/auth/refresh`,
+      {
+        refreshToken,
+      }
+    );
 
     const { token, refreshToken: newRefreshToken } = response.data;
-    
-    localStorage.setItem('token', token);
+
+    localStorage.setItem("token", token);
     if (newRefreshToken) {
-      localStorage.setItem('refreshToken', newRefreshToken);
+      localStorage.setItem("refreshToken", newRefreshToken);
     }
 
     if (toastService) {
-      toastService.info('Session refreshed successfully');
+      toastService.info("Session refreshed successfully");
     }
 
     // Retry the original request
     window.location.reload();
   } catch (refreshError) {
-    console.error('Token refresh failed:', refreshError);
-    redirectToLogin('Session expired. Please log in again.');
+    console.error("Token refresh failed:", refreshError);
+    redirectToLogin("Session expired. Please log in again.");
   }
 }
 
@@ -235,17 +242,17 @@ async function attemptTokenRefresh(refreshToken) {
  * Redirect to login page
  */
 function redirectToLogin(message) {
-  localStorage.removeItem('token');
-  localStorage.removeItem('refreshToken');
-  localStorage.removeItem('user');
-  
+  localStorage.removeItem("token");
+  localStorage.removeItem("refreshToken");
+  localStorage.removeItem("user");
+
   if (toastService) {
     toastService.warning(message);
   }
-  
+
   // Delay redirect to allow toast to show
   setTimeout(() => {
-    window.location.href = '/login';
+    window.location.href = "/login";
   }, 1000);
 }
 
@@ -253,16 +260,18 @@ function redirectToLogin(message) {
  * Handle rate limiting errors
  */
 function handleRateLimitError(error) {
-  const retryAfter = error.response?.headers['retry-after'] || 
-                    error.response?.data?.retryAfter || 60;
+  const retryAfter =
+    error.response?.headers["retry-after"] ||
+    error.response?.data?.retryAfter ||
+    60;
 
   if (toastService) {
     toastService.warning(
       `Too many requests. Please wait ${retryAfter} seconds before trying again.`,
       {
-        title: 'Rate Limited',
+        title: "Rate Limited",
         duration: retryAfter * 1000,
-        correlationId: error.config?.metadata?.correlationId
+        correlationId: error.config?.metadata?.correlationId,
       }
     );
   }
@@ -278,7 +287,9 @@ function shouldRetry(config) {
   }
 
   // Don't retry certain methods
-  if (['post', 'put', 'patch', 'delete'].includes(config.method?.toLowerCase())) {
+  if (
+    ["post", "put", "patch", "delete"].includes(config.method?.toLowerCase())
+  ) {
     return false;
   }
 
@@ -293,14 +304,14 @@ async function handleRetry(config, error) {
   config.__retryCount++;
 
   const delay = calculateRetryDelay(config.__retryCount);
-  
+
   if (toastService && config.__retryCount === 1) {
     toastService.info(
       `Request failed. Retrying in ${Math.round(delay / 1000)} seconds...`,
       {
-        title: 'Retrying Request',
+        title: "Retrying Request",
         duration: delay,
-        correlationId: config.metadata?.correlationId
+        correlationId: config.metadata?.correlationId,
       }
     );
   }
@@ -309,7 +320,7 @@ async function handleRetry(config, error) {
 
   // Update correlation ID for retry
   const newCorrelationId = generateCorrelationId();
-  config.headers['X-Correlation-ID'] = newCorrelationId;
+  config.headers["X-Correlation-ID"] = newCorrelationId;
   config.metadata.correlationId = newCorrelationId;
   config.metadata.startTime = Date.now();
 
@@ -323,7 +334,7 @@ function showErrorNotification(error) {
   if (!toastService) return;
 
   const errorType = classifyError(error);
-  
+
   // Don't show notifications for certain error types
   if ([ErrorTypes.AUTH, ErrorTypes.RATE_LIMIT].includes(errorType)) {
     return;
@@ -331,12 +342,14 @@ function showErrorNotification(error) {
 
   // Show appropriate error message
   toastService.showApiError(error, {
-    onRetry: isRetryableError(error) ? () => {
-      // Retry the original request
-      const config = { ...error.config };
-      delete config.__retryCount;
-      return apiClient(config);
-    } : undefined
+    onRetry: isRetryableError(error)
+      ? () => {
+          // Retry the original request
+          const config = { ...error.config };
+          delete config.__retryCount;
+          return apiClient(config);
+        }
+      : undefined,
   });
 }
 
@@ -352,7 +365,7 @@ const enhancedApiClient = {
       const response = await apiClient.get(url, config);
       return response;
     } catch (error) {
-      this.handleMethodError('GET', url, error);
+      this.handleMethodError("GET", url, error);
       throw error;
     }
   },
@@ -363,7 +376,7 @@ const enhancedApiClient = {
       const response = await apiClient.post(url, data, config);
       return response;
     } catch (error) {
-      this.handleMethodError('POST', url, error);
+      this.handleMethodError("POST", url, error);
       throw error;
     }
   },
@@ -374,7 +387,7 @@ const enhancedApiClient = {
       const response = await apiClient.put(url, data, config);
       return response;
     } catch (error) {
-      this.handleMethodError('PUT', url, error);
+      this.handleMethodError("PUT", url, error);
       throw error;
     }
   },
@@ -385,7 +398,7 @@ const enhancedApiClient = {
       const response = await apiClient.delete(url, config);
       return response;
     } catch (error) {
-      this.handleMethodError('DELETE', url, error);
+      this.handleMethodError("DELETE", url, error);
       throw error;
     }
   },
@@ -393,7 +406,7 @@ const enhancedApiClient = {
   // Handle method-specific errors
   handleMethodError(method, url, error) {
     console.error(`${method} ${url} failed:`, error);
-    
+
     // Log to local storage for debugging
     const errorLog = {
       method,
@@ -401,17 +414,22 @@ const enhancedApiClient = {
       error: error.message,
       status: error.response?.status,
       timestamp: new Date().toISOString(),
-      correlationId: error.config?.metadata?.correlationId
+      correlationId: error.config?.metadata?.correlationId,
     };
 
     try {
-      const existingLogs = JSON.parse(localStorage.getItem('api_errors') || '[]');
+      const existingLogs = JSON.parse(
+        localStorage.getItem("api_errors") || "[]"
+      );
       existingLogs.push(errorLog);
-      localStorage.setItem('api_errors', JSON.stringify(existingLogs.slice(-50))); // Keep last 50 errors
+      localStorage.setItem(
+        "api_errors",
+        JSON.stringify(existingLogs.slice(-50))
+      ); // Keep last 50 errors
     } catch (storageError) {
-      console.warn('Failed to log error to localStorage:', storageError);
+      console.warn("Failed to log error to localStorage:", storageError);
     }
-  }
+  },
 };
 
 export default enhancedApiClient;
