@@ -3,29 +3,29 @@
  * Provides structured logging for frontend applications with backend integration
  */
 
-import apiClient from '../lib/axios.js';
+import { apiClient } from "../config/api.js";
 
 /**
  * Log Levels
  */
 export const LogLevels = {
-  ERROR: 'error',
-  WARN: 'warn',
-  INFO: 'info',
-  DEBUG: 'debug'
+  ERROR: "error",
+  WARN: "warn",
+  INFO: "info",
+  DEBUG: "debug",
 };
 
 /**
  * Log Categories
  */
 export const LogCategories = {
-  USER_ACTION: 'user_action',
-  API_ERROR: 'api_error',
-  COMPONENT_ERROR: 'component_error',
-  NAVIGATION: 'navigation',
-  PERFORMANCE: 'performance',
-  SECURITY: 'security',
-  BUSINESS: 'business'
+  USER_ACTION: "user_action",
+  API_ERROR: "api_error",
+  COMPONENT_ERROR: "component_error",
+  NAVIGATION: "navigation",
+  PERFORMANCE: "performance",
+  SECURITY: "security",
+  BUSINESS: "business",
 };
 
 /**
@@ -39,7 +39,7 @@ class LoggingService {
     this.flushInterval = 30000; // 30 seconds
     this.batchSize = 10;
     this.isOnline = navigator.onLine;
-    
+
     this.initializeService();
   }
 
@@ -48,12 +48,12 @@ class LoggingService {
    */
   initializeService() {
     // Set up online/offline detection
-    window.addEventListener('online', () => {
+    window.addEventListener("online", () => {
       this.isOnline = true;
       this.flushLogs();
     });
 
-    window.addEventListener('offline', () => {
+    window.addEventListener("offline", () => {
       this.isOnline = false;
     });
 
@@ -63,28 +63,28 @@ class LoggingService {
     }, this.flushInterval);
 
     // Flush logs before page unload
-    window.addEventListener('beforeunload', () => {
+    window.addEventListener("beforeunload", () => {
       this.flushLogs(true);
     });
 
     // Set up global error handler
-    window.addEventListener('error', (event) => {
-      this.error('Global error caught', {
+    window.addEventListener("error", (event) => {
+      this.error("Global error caught", {
         message: event.error?.message || event.message,
         filename: event.filename,
         lineno: event.lineno,
         colno: event.colno,
         stack: event.error?.stack,
-        category: LogCategories.COMPONENT_ERROR
+        category: LogCategories.COMPONENT_ERROR,
       });
     });
 
     // Set up unhandled promise rejection handler
-    window.addEventListener('unhandledrejection', (event) => {
-      this.error('Unhandled promise rejection', {
+    window.addEventListener("unhandledrejection", (event) => {
+      this.error("Unhandled promise rejection", {
         reason: event.reason?.message || String(event.reason),
         stack: event.reason?.stack,
-        category: LogCategories.COMPONENT_ERROR
+        category: LogCategories.COMPONENT_ERROR,
       });
     });
   }
@@ -101,17 +101,17 @@ class LoggingService {
    */
   getUserContext() {
     try {
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
       return {
-        userId: user.id || 'anonymous',
-        userRole: user.role || 'unknown',
-        userName: user.name || 'unknown'
+        userId: user.id || "anonymous",
+        userRole: user.role || "unknown",
+        userName: user.name || "unknown",
       };
     } catch (error) {
       return {
-        userId: 'anonymous',
-        userRole: 'unknown',
-        userName: 'unknown'
+        userId: "anonymous",
+        userRole: "unknown",
+        userName: "unknown",
       };
     }
   }
@@ -121,7 +121,7 @@ class LoggingService {
    */
   createLogEntry(level, message, context = {}) {
     const userContext = this.getUserContext();
-    
+
     return {
       level,
       message,
@@ -131,13 +131,13 @@ class LoggingService {
       userAgent: navigator.userAgent,
       ...userContext,
       category: context.category || LogCategories.USER_ACTION,
-      component: context.component || 'unknown',
+      component: context.component || "unknown",
       action: context.action,
       data: context.data,
       error: context.error,
       stack: context.stack,
       performance: context.performance,
-      sessionId: this.getSessionId()
+      sessionId: this.getSessionId(),
     };
   }
 
@@ -145,10 +145,12 @@ class LoggingService {
    * Get or create session ID
    */
   getSessionId() {
-    let sessionId = sessionStorage.getItem('logging_session_id');
+    let sessionId = sessionStorage.getItem("logging_session_id");
     if (!sessionId) {
-      sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      sessionStorage.setItem('logging_session_id', sessionId);
+      sessionId = `session_${Date.now()}_${Math.random()
+        .toString(36)
+        .substr(2, 9)}`;
+      sessionStorage.setItem("logging_session_id", sessionId);
     }
     return sessionId;
   }
@@ -177,9 +179,9 @@ class LoggingService {
    */
   error(message, context = {}) {
     const logEntry = this.createLogEntry(LogLevels.ERROR, message, context);
-    
+
     // Always log to console in development
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === "development") {
       console.error(`[${logEntry.correlationId}] ${message}`, context);
     }
 
@@ -192,8 +194,8 @@ class LoggingService {
    */
   warn(message, context = {}) {
     const logEntry = this.createLogEntry(LogLevels.WARN, message, context);
-    
-    if (process.env.NODE_ENV === 'development') {
+
+    if (process.env.NODE_ENV === "development") {
       console.warn(`[${logEntry.correlationId}] ${message}`, context);
     }
 
@@ -206,8 +208,8 @@ class LoggingService {
    */
   info(message, context = {}) {
     const logEntry = this.createLogEntry(LogLevels.INFO, message, context);
-    
-    if (process.env.NODE_ENV === 'development') {
+
+    if (process.env.NODE_ENV === "development") {
       console.info(`[${logEntry.correlationId}] ${message}`, context);
     }
 
@@ -220,11 +222,11 @@ class LoggingService {
    */
   debug(message, context = {}) {
     // Only log debug messages in development
-    if (process.env.NODE_ENV !== 'development') return;
+    if (process.env.NODE_ENV !== "development") return;
 
     const logEntry = this.createLogEntry(LogLevels.DEBUG, message, context);
     console.debug(`[${logEntry.correlationId}] ${message}`, context);
-    
+
     this.addToQueue(logEntry);
     return logEntry.correlationId;
   }
@@ -237,32 +239,32 @@ class LoggingService {
       category: LogCategories.USER_ACTION,
       component,
       action,
-      data
+      data,
     });
   }
 
   /**
    * Log API error
    */
-  logApiError(error, endpoint, method = 'unknown') {
+  logApiError(error, endpoint, method = "unknown") {
     return this.error(`API error: ${method} ${endpoint}`, {
       category: LogCategories.API_ERROR,
-      component: 'api_client',
+      component: "api_client",
       error: {
         message: error.message,
         status: error.response?.status,
         statusText: error.response?.statusText,
-        data: error.response?.data
+        data: error.response?.data,
       },
       endpoint,
-      method
+      method,
     });
   }
 
   /**
    * Log component error
    */
-  logComponentError(error, component, action = 'render') {
+  logComponentError(error, component, action = "render") {
     return this.error(`Component error in ${component}`, {
       category: LogCategories.COMPONENT_ERROR,
       component,
@@ -270,35 +272,35 @@ class LoggingService {
       error: {
         message: error.message,
         stack: error.stack,
-        name: error.name
-      }
+        name: error.name,
+      },
     });
   }
 
   /**
    * Log navigation event
    */
-  logNavigation(from, to, method = 'unknown') {
+  logNavigation(from, to, method = "unknown") {
     return this.info(`Navigation: ${from} -> ${to}`, {
       category: LogCategories.NAVIGATION,
-      component: 'router',
-      action: 'navigate',
-      data: { from, to, method }
+      component: "router",
+      action: "navigate",
+      data: { from, to, method },
     });
   }
 
   /**
    * Log performance metric
    */
-  logPerformance(metric, value, component = 'unknown') {
+  logPerformance(metric, value, component = "unknown") {
     return this.info(`Performance: ${metric}`, {
       category: LogCategories.PERFORMANCE,
       component,
       performance: {
         metric,
         value,
-        timestamp: performance.now()
-      }
+        timestamp: performance.now(),
+      },
     });
   }
 
@@ -308,9 +310,9 @@ class LoggingService {
   logSecurity(event, details = {}) {
     return this.warn(`Security event: ${event}`, {
       category: LogCategories.SECURITY,
-      component: 'security',
+      component: "security",
       action: event,
-      data: details
+      data: details,
     });
   }
 
@@ -320,9 +322,9 @@ class LoggingService {
   logBusiness(event, data = {}) {
     return this.info(`Business event: ${event}`, {
       category: LogCategories.BUSINESS,
-      component: 'business',
+      component: "business",
       action: event,
-      data
+      data,
     });
   }
 
@@ -336,24 +338,24 @@ class LoggingService {
     const logsToSend = this.logQueue.splice(0, this.batchSize);
 
     try {
-      await apiClient.post('/api/v1/logs/frontend', {
+      await apiClient.post("/api/v1/logs/frontend", {
         logs: logsToSend,
         metadata: {
           userAgent: navigator.userAgent,
           url: window.location.href,
-          timestamp: new Date().toISOString()
-        }
+          timestamp: new Date().toISOString(),
+        },
       });
 
-      if (process.env.NODE_ENV === 'development') {
+      if (process.env.NODE_ENV === "development") {
         console.debug(`Flushed ${logsToSend.length} logs to backend`);
       }
     } catch (error) {
       // Put logs back in queue if sending failed
       this.logQueue.unshift(...logsToSend);
-      
-      console.warn('Failed to send logs to backend:', error.message);
-      
+
+      console.warn("Failed to send logs to backend:", error.message);
+
       // Store logs locally as backup
       this.storeLogsLocally(logsToSend);
     }
@@ -364,14 +366,16 @@ class LoggingService {
    */
   storeLogsLocally(logs) {
     try {
-      const existingLogs = JSON.parse(localStorage.getItem('frontend_logs') || '[]');
+      const existingLogs = JSON.parse(
+        localStorage.getItem("frontend_logs") || "[]"
+      );
       const allLogs = [...existingLogs, ...logs];
-      
+
       // Keep only last 100 logs
       const recentLogs = allLogs.slice(-100);
-      localStorage.setItem('frontend_logs', JSON.stringify(recentLogs));
+      localStorage.setItem("frontend_logs", JSON.stringify(recentLogs));
     } catch (error) {
-      console.warn('Failed to store logs locally:', error.message);
+      console.warn("Failed to store logs locally:", error.message);
     }
   }
 
@@ -380,9 +384,9 @@ class LoggingService {
    */
   getStoredLogs() {
     try {
-      return JSON.parse(localStorage.getItem('frontend_logs') || '[]');
+      return JSON.parse(localStorage.getItem("frontend_logs") || "[]");
     } catch (error) {
-      console.warn('Failed to retrieve stored logs:', error.message);
+      console.warn("Failed to retrieve stored logs:", error.message);
       return [];
     }
   }
@@ -392,10 +396,10 @@ class LoggingService {
    */
   clearStoredLogs() {
     try {
-      localStorage.removeItem('frontend_logs');
+      localStorage.removeItem("frontend_logs");
       this.logQueue = [];
     } catch (error) {
-      console.warn('Failed to clear stored logs:', error.message);
+      console.warn("Failed to clear stored logs:", error.message);
     }
   }
 
@@ -418,7 +422,7 @@ class LoggingService {
       isEnabled: this.isEnabled,
       isOnline: this.isOnline,
       sessionId: this.getSessionId(),
-      storedLogsCount: this.getStoredLogs().length
+      storedLogsCount: this.getStoredLogs().length,
     };
   }
 }

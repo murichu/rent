@@ -1,5 +1,99 @@
+import axios from "axios";
+
 // API Configuration
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api'
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL || "http://localhost:4000/api";
+
+/**
+ * Generate correlation ID for request tracking
+ */
+function generateCorrelationId() {
+  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+// Create axios instance
+const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 30000,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
+// Request interceptor
+apiClient.interceptors.request.use(
+  (config) => {
+    const correlationId = generateCorrelationId();
+    config.headers["X-Correlation-ID"] = correlationId;
+    config.metadata = { correlationId, startTime: Date.now() };
+
+    const token = localStorage.getItem("token");
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    if (user.id) {
+      config.headers["X-User-ID"] = user.id;
+    }
+
+    if (import.meta.env.DEV) {
+      console.log(`🚀 API Request [${correlationId}]:`, {
+        method: config.method?.toUpperCase(),
+        url: config.url,
+      });
+    }
+
+    return config;
+  },
+  (error) => {
+    console.error("Request interceptor error:", error);
+    return Promise.reject(error);
+  }
+);
+
+// Response interceptor
+apiClient.interceptors.response.use(
+  (response) => {
+    if (import.meta.env.DEV && response.config.metadata) {
+      const duration = Date.now() - response.config.metadata.startTime;
+      console.log(
+        `✅ API Response [${response.config.metadata.correlationId}]:`,
+        {
+          status: response.status,
+          duration: `${duration}ms`,
+          url: response.config.url,
+        }
+      );
+    }
+    return response;
+  },
+  async (error) => {
+    const originalRequest = error.config;
+    const correlationId = originalRequest?.metadata?.correlationId;
+
+    if (import.meta.env.DEV) {
+      console.error(`❌ API Error [${correlationId}]:`, {
+        status: error.response?.status,
+        message: error.message,
+        url: originalRequest?.url,
+      });
+    }
+
+    // Handle 401 errors
+    if (error.response?.status === 401) {
+      localStorage.removeItem("token");
+      localStorage.removeItem("refreshToken");
+      localStorage.removeItem("user");
+      window.location.href = "/login";
+    }
+
+    return Promise.reject(error);
+  }
+);
+
+// Export the configured axios instance
+export { apiClient };
 
 // API Endpoints
 export const API_ENDPOINTS = {
@@ -175,6 +269,6 @@ export const API_ENDPOINTS = {
 
   // Health
   HEALTH: `http://localhost:4000/health`,
-}
+};
 
-export default API_ENDPOINTS
+export default API_ENDPOINTS;
